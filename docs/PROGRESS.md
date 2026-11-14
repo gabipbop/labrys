@@ -16,7 +16,7 @@
 - Plugins rangés sous « LABRYS » dans la DAW au lieu de « Raw Powa Studio » (ADR-010, demande de Gaby).
 
 ### Reste à faire
-- Gaby : DÉDALE visible dans Ableton ; vérifier après le passage sous LABRYS qu'il est rangé sous LABRYS et s'ouvre (VST3 et AU).
+- Gaby : DÉDALE vérifié dans Ableton, rangé sous LABRYS (2026-11-15).
 - CI verte, puis PR de fin de phase 1.
 
 ### Questions ouvertes
