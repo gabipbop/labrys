@@ -6,7 +6,7 @@ renders/
 docs/reference/
 
 # Outils téléchargés
-tools/pluginval*
+tools/pluginval.app/
 
 # Tutoriel web
 node_modules/
