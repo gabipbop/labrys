@@ -13,9 +13,10 @@
 - Build zéro warning sur les 4 presets ; binaires universal (arm64 + x86_64).
 - `auval -v aumu Ddle Rwps` : OK. pluginval niveau 5 et 10, VST3 et AU : OK.
 - Nom DAW en ASCII (« DEDALE ») après un échec de chargement du VST3 avec l'accent (ADR-007).
+- Plugins rangés sous « LABRYS » dans la DAW au lieu de « Raw Powa Studio » (ADR-010, demande de Gaby).
 
 ### Reste à faire
-- Gaby : vérifier que DÉDALE se charge dans Ableton (VST3 et AU), et dans Reaper si disponible.
+- Gaby : chargement dans Ableton vérifié (VST3 et AU) ; revérifier après le passage sous LABRYS.
 - CI verte, puis PR de fin de phase 1.
 
 ### Questions ouvertes

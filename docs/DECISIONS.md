@@ -58,3 +58,11 @@ Format court : contexte, décision, conséquences. Une entrée par choix, la plu
 - La CI lance pluginval niveau 5 (VST3 + AU) et `auval`. Niveau 10 en local avant chaque merge.
 - Coût CI : runner standard sur repo public (gratuit), `concurrency` qui annule les runs dépassés, pas de CI pour
   les changements de docs seuls, timeout 45 min.
+
+## ADR-010 — Les plugins sont rangés sous « LABRYS » dans les DAW (2026-11-15)
+- **Contexte** : les hôtes rangent les plugins par fabricant (`COMPANY_NAME` JUCE : vendor VST3, préfixe du nom AU).
+  Avec « Raw Powa Studio » (§15.1), DÉDALE apparaissait dans un dossier Raw Powa Studio ; Gaby préfère un dossier LABRYS.
+- **Décision** : fabricant vu par la DAW = `LABRYS_VENDOR_NAME` (= « LABRYS ») ; Raw Powa Studio reste l'éditeur
+  (copyright, bundle IDs `com.rawpowastudio.*`, code fabricant `Rwps`).
+- **Conséquences** : les DAW affichent « LABRYS: DEDALE ». Les identifiants (codes AU, UID VST3) ne changent pas,
+  donc un projet existant retrouve le plugin. TORO, hors suite, reste sous Raw Powa Studio.
