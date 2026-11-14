@@ -2,7 +2,8 @@
 # Noms et codes : libs/ariane/cmake/SuiteIdentity.cmake
 
 juce_add_plugin(Dedale
-    COMPANY_NAME "${LABRYS_COMPANY_NAME}"
+    COMPANY_NAME "${LABRYS_VENDOR_NAME}"
+    COMPANY_COPYRIGHT "${LABRYS_COMPANY_NAME}"
     PRODUCT_NAME "${DEDALE_FILE_NAME}"
     PLUGIN_NAME "${DEDALE_HOST_NAME}"
     BUNDLE_ID "${DEDALE_BUNDLE_ID}"

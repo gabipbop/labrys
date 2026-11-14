@@ -2,7 +2,9 @@
 # Pour renommer un instrument, on ne modifie que ce fichier.
 
 set(LABRYS_SUITE_NAME "LABRYS")
-set(LABRYS_COMPANY_NAME "Raw Powa Studio")
+set(LABRYS_COMPANY_NAME "Raw Powa Studio")   # éditeur : copyright, métadonnées
+# Fabricant vu par la DAW : c'est le dossier dans lequel les hôtes rangent les plugins (ADR-010).
+set(LABRYS_VENDOR_NAME "${LABRYS_SUITE_NAME}")
 set(LABRYS_MANUFACTURER_CODE "Rwps")
 set(LABRYS_BUNDLE_ID_PREFIX "com.rawpowastudio")
 
