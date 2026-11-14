@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Outils
+        run: brew install ninja clang-format
+
+      - name: Formatage
+        run: git ls-files '*.cpp' '*.h' | xargs clang-format --dry-run --Werror
+
+      - name: Cache des dépendances FetchContent
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
+
+      - name: Configure (release universal)
+        run: cmake --preset release
+
+      - name: Build
+        run: cmake --build --preset release
+
+      - name: Tests
+        run: ctest --preset release
