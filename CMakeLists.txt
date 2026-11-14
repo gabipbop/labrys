@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(LABRYS VERSION 0.0.1 LANGUAGES CXX)
+project(LABRYS VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(LABRYS_BUILD_TESTS "Construit les cibles de tests" ON)
 option(LABRYS_WARNINGS_AS_ERRORS "Traite les warnings comme des erreurs" OFF)
 option(LABRYS_SANITIZE "AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+option(LABRYS_COPY_PLUGINS "Copie les plugins dans ~/Library/Audio/Plug-Ins après le build" OFF)
 
 if(LABRYS_SANITIZE)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -19,8 +20,14 @@ endif()
 include(libs/ariane/cmake/SuiteIdentity.cmake)
 include(libs/ariane/cmake/ArianeWarnings.cmake)
 
+include(FetchContent)
+FetchContent_Declare(JUCE
+    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG 8.0.15
+    GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(JUCE)
+
 if(LABRYS_BUILD_TESTS)
-    include(FetchContent)
     FetchContent_Declare(Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
         GIT_TAG v3.8.1
