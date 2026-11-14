@@ -1,0 +1,17 @@
+# Build et rendus
+build/
+renders/
+
+# Manuels Moog : référence locale, ne pas redistribuer
+docs/reference/
+
+# Outils téléchargés
+tools/pluginval*
+
+# Tutoriel web
+node_modules/
+dist/
+
+# Divers
+.DS_Store
+.cache/
