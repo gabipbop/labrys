@@ -40,7 +40,7 @@ Vérifié par Gaby dans Ableton (rangé sous LABRYS), auval et pluginval 10 OK.
 ### Questions ouvertes
 - Jacks exposés à la DAW (sorties CV, entrées sidechain), voire entre instruments : à trancher avant la phase 4.
 
-## Phase en cours : 3 — Voix (branche `phase-3-voice`, PR #4)
+## Phase 3 — Voix : mergée (v0.3.0, PR #4), réponses d'écoute encore attendues
 Démarrée à la demande de Gaby (2026-11-15) avant ses réponses au checkpoint de la phase 2 (PR 3 mergée le même
 jour à sa demande) : ses retours d'écoute seront intégrés quand ils arriveront.
 
@@ -77,8 +77,8 @@ jour à sa demande) : ses retours d'écoute seront intégrés quand ils arrivero
 - Drift analogique, interrupteur de coloration du VCW, oversampling réglable : phase 6.
 - U MIX (`umix1_lvl`), SYNC du MOD VCO, entrées audio directes : phase 4. Bouton TRIGGER : phase 5.
 
-## Phase en cours : 4 — Patch bay (branche `phase-4-patchbay`, empilée sur `phase-3-voice`)
-Démarrée à la demande de Gaby (2026-11-15), PR 4 ouverte et retours d'écoute des phases 2 et 3 encore attendus.
+## Phase en cours : 4 — Patch bay (branche `phase-4-patchbay`, PR #5)
+Démarrée à la demande de Gaby (2026-11-15), retours d'écoute des phases 2 et 3 encore attendus.
 Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phase 6), rien en phase 4.
 
 ### Plan
@@ -104,7 +104,6 @@ Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phas
 
 ### En attente
 - **Réponses de Gaby aux checkpoints des phases 2, 3 et 4** (`LISTENING_CHECKLIST.md`).
-- Merge de la PR 4 (phase 3), puis recalage de `phase-4-patchbay` sur `main`.
 
 ### Hypothèses à valider (ADR-016)
 - EG2 TRIG patché isole EG2 ; échelle des CV externes (±5 V = toute la course) ; U MIX saturé à ±10 V.
