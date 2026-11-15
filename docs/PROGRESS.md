@@ -5,7 +5,7 @@
 ## Phase 1 — Squelette : terminée (PR #2)
 Vérifié par Gaby dans Ableton (rangé sous LABRYS), auval et pluginval 10 OK.
 
-## Phase en cours : 2 — Séquenceur (branche `phase-2-sequencer`)
+## Phase 2 — Séquenceur : mergée (v0.2.0, PR #3), réponses d'écoute encore attendues
 
 ### Plan
 - Bibliothèque pure `dedale_core` (aucun JUCE) : `Sequencer/{Rng,Quantizer,GenerativeSequencer,Clock}`, `Calibration.h`.
@@ -40,9 +40,9 @@ Vérifié par Gaby dans Ableton (rangé sous LABRYS), auval et pluginval 10 OK.
 ### Questions ouvertes
 - Jacks exposés à la DAW (sorties CV, entrées sidechain), voire entre instruments : à trancher avant la phase 4.
 
-## Phase en cours : 3 — Voix (branche `phase-3-voice`, empilée sur `phase-2-sequencer`)
-Démarrée à la demande de Gaby (2026-11-15) avant ses réponses au checkpoint de la phase 2 : la PR 3 reste ouverte,
-ses retours d'écoute seront intégrés quand ils arriveront.
+## Phase en cours : 3 — Voix (branche `phase-3-voice`, PR #4)
+Démarrée à la demande de Gaby (2026-11-15) avant ses réponses au checkpoint de la phase 2 (PR 3 mergée le même
+jour à sa demande) : ses retours d'écoute seront intégrés quand ils arriveront.
 
 ### Plan
 - Modules DSP purs dans `Source/DSP` (dans `dedale_core`) : `Vco` (sinus, TZFM), `ModVco` (triangle PolyBLAMP),
@@ -68,7 +68,6 @@ ses retours d'écoute seront intégrés quand ils arriveront.
 
 ### En attente
 - **Réponses de Gaby aux checkpoints des phases 2 et 3** (`LISTENING_CHECKLIST.md`) avant la phase 4.
-- Merge de la PR 3 (phase 2), puis rebase de `phase-3-voice` sur `main`.
 
 ### Hypothèses à valider (ADR-015)
 - Modèle du wavefolder et toutes ses constantes ; loi d'EG TRIG MIX ; profondeurs de modulation d'EG1.
