@@ -190,6 +190,33 @@ void SquareButton::paintButton(juce::Graphics& g, bool highlighted, bool down)
     g.strokePath(shape, juce::PathStrokeType(0.8f));
 }
 
+IconButton::IconButton(Icon iconToDraw, const juce::String& tooltip) : juce::Button({}), icon(iconToDraw)
+{
+    setTooltip(tooltip);
+}
+
+void IconButton::paintButton(juce::Graphics& g, bool highlighted, bool down)
+{
+    const auto area = getLocalBounds().toFloat().reduced(2.0f);
+    const auto centre = area.getCentre();
+    const auto r = area.getWidth() * 0.5f;
+    juce::Path path;
+    if (icon == Icon::gear)
+    {
+        path.addStar(centre, 8, r * 0.62f, r);
+        path.addEllipse(juce::Rectangle<float>(r * 0.7f, r * 0.7f).withCentre(centre));
+        path.setUsingNonZeroWinding(false); // le rond central est un trou
+    }
+    else
+    {
+        const auto direction = icon == Icon::next ? 1.0f : -1.0f;
+        path.addTriangle(centre.x + direction * r * 0.6f, centre.y, centre.x - direction * r * 0.5f,
+                         centre.y - r * 0.7f, centre.x - direction * r * 0.5f, centre.y + r * 0.7f);
+    }
+    g.setColour(down ? colour::lit : highlighted ? colour::ink : colour::sub);
+    g.fillPath(path);
+}
+
 // --- LEDs du séquenceur ----------------------------------------------------------------------------------
 
 void SequencerLeds::refresh(ButtonComboHandler::DisplayMode mode, int clockDivision)

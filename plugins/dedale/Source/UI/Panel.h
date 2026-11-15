@@ -27,6 +27,9 @@ private:
     void perform(const ActionList& actions);
     void comboPressed(PanelButton button);
     void comboReleased(PanelButton button);
+    void showPresetMenu();
+    void showSettingsMenu();
+    void askPresetName();
     SquareButton& addButton(std::unique_ptr<SquareButton>& slot, const char* tooltip, float x, float y,
                             float width);
 
@@ -41,6 +44,10 @@ private:
     std::array<bool, static_cast<std::size_t>(PanelButton::count)> comboDown{};
     std::unique_ptr<SquareButton> runButton, chainButton, syncButton, shiftButton;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> attachments;
+    IconButton previousPreset{IconButton::Icon::previous, juce::String::fromUTF8("Preset précédent")};
+    IconButton nextPreset{IconButton::Icon::next, "Preset suivant"};
+    IconButton settingsButton{IconButton::Icon::gear, juce::String::fromUTF8("Réglages globaux")};
+    ModeDisplay presetDisplay;
     SequencerLeds leds;
     ModeDisplay display;
     OrderSwitch order;
