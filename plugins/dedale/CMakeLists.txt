@@ -51,6 +51,14 @@ set_source_files_properties(Source/PluginProcessor.cpp Source/PluginEditor.cpp
     TARGET_DIRECTORY Dedale
     PROPERTIES COMPILE_OPTIONS "$<TARGET_PROPERTY:ariane_warnings,INTERFACE_COMPILE_OPTIONS>")
 
+# DedaleRender : rendu hors temps réel des scénarios d'écoute (WAV dans renders/, §15.6).
+# L'outil lie le code partagé du plugin (cible statique Dedale) et reprend ses includes et définitions JUCE,
+# sans recompiler les modules.
+add_executable(DedaleRender Tools/DedaleRender.cpp)
+target_link_libraries(DedaleRender PRIVATE Dedale dedale_core ariane_warnings)
+target_include_directories(DedaleRender SYSTEM PRIVATE $<TARGET_PROPERTY:Dedale,INCLUDE_DIRECTORIES>)
+target_compile_definitions(DedaleRender PRIVATE $<TARGET_PROPERTY:Dedale,COMPILE_DEFINITIONS>)
+
 if(LABRYS_BUILD_TESTS)
     add_executable(DedaleTests
         Tests/ClockTests.cpp
