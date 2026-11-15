@@ -11,14 +11,53 @@ namespace
 {
 constexpr int kSyncHost = 1;
 
-// TEMPO exponentiel : autant de course pour 10 → 20 que pour 300 → 600 pas/min.
-juce::NormalisableRange<float> tempoRange()
+// Plage exponentielle : autant de course pour chaque octave (fréquences, temps, tempo).
+juce::NormalisableRange<float> exponentialRange(float minimum, float maximum)
 {
-    const auto ratio = cal::kTempoMaxStepsPerMinute / cal::kTempoMinStepsPerMinute;
-    return {cal::kTempoMinStepsPerMinute, cal::kTempoMaxStepsPerMinute,
-            [ratio](float start, float, float t) { return start * std::pow(ratio, t); },
+    const auto ratio = maximum / minimum;
+    return {minimum, maximum, [ratio](float start, float, float t) { return start * std::pow(ratio, t); },
             [ratio](float start, float, float v) { return std::log(v / start) / std::log(ratio); }};
 }
+
+struct ContinuousSpec
+{
+    const char* id;
+    const char* name;
+    float minimum;
+    float maximum;
+    float defaultValue;
+    bool exponential = false;
+};
+
+// Paramètres continus du §10, dans l'ordre de DedaleProcessor::Continuous.
+constexpr std::array<ContinuousSpec, DedaleProcessor::numContinuous> kContinuous{{
+    {"vco_freq", "VCO FREQUENCY", 20.0f, 5000.0f, 110.0f, true},
+    {"vco_eg1_amt", "VCO EG1 AMT", -1.0f, 1.0f, 0.0f},
+    {"vco_seq1_amt", "VCO SEQ1 AMT", 0.0f, 1.0f, 1.0f},
+    {"mvco_freq", "MOD VCO FREQUENCY", 0.1f, 1300.0f, 55.0f, true},
+    {"mvco_eg1_amt", "MOD VCO EG1 AMT", -1.0f, 1.0f, 0.0f},
+    {"mvco_seq2_amt", "MOD VCO SEQ2 AMT", 0.0f, 1.0f, 0.0f},
+    {"mvco_fm_amt", "FM AMT", 0.0f, 1.0f, 0.0f},
+    {"mix_vco", "VCO LVL", 0.0f, 1.0f, 0.5f},
+    {"mix_ring", "RING MOD LVL", 0.0f, 1.0f, 0.0f},
+    {"mix_mvco", "MOD VCO LVL", 0.0f, 1.0f, 0.0f},
+    {"mix_noise", "NOISE LVL", 0.0f, 1.0f, 0.0f},
+    {"noise_tone", "NOISE TONE", 0.0f, 1.0f, 0.5f},
+    {"vcw_fold", "VCW FOLD", 0.0f, 1.0f, 0.3f},
+    {"vcw_bias", "VCW BIAS", -1.0f, 1.0f, 0.0f},
+    {"vcw_eg1_amt", "VCW EG1/CV AMT", -1.0f, 1.0f, 0.3f},
+    {"vcw_seq1_amt", "VCW SEQ1 AMT", 0.0f, 1.0f, 0.0f},
+    {"vcf_cutoff", "VCF CUTOFF", 20.0f, 20000.0f, 800.0f, true},
+    {"vcf_eg1_amt", "VCF EG1/CV AMT", -1.0f, 1.0f, 0.3f},
+    {"vcf_seq2_amt", "VCF SEQ2 AMT", 0.0f, 1.0f, 0.0f},
+    {"vcf_res", "RESONANCE", 0.0f, 1.0f, 0.2f},
+    {"vcf_mode", "FILTER MODE", 0.0f, 1.0f, 0.0f},
+    {"blend", "BLEND", 0.0f, 1.0f, 0.5f},
+    {"eg1_decay", "EG1 DECAY", 0.01f, 10.0f, 0.3f, true},
+    {"eg2_decay", "EG2 DECAY", 0.01f, 10.0f, 0.4f, true},
+    {"eg_trig_mix", "EG TRIG MIX", 0.0f, 1.0f, 0.0f},
+    {"volume", "VOLUME", 0.0f, 1.0f, 0.7f},
+}};
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout DedaleProcessor::createParameterLayout()
@@ -30,7 +69,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout DedaleProcessor::createParam
     const juce::NormalisableRange<float> unit{0.0f, 1.0f};
 
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
-    layout.add(std::make_unique<Float>(id("tempo"), "TEMPO", tempoRange(), cal::kTempoDefaultStepsPerMinute));
+    for (const auto& spec : kContinuous)
+    {
+        const auto range = spec.exponential ? exponentialRange(spec.minimum, spec.maximum)
+                                            : juce::NormalisableRange<float>{spec.minimum, spec.maximum};
+        layout.add(std::make_unique<Float>(id(spec.id), spec.name, range, spec.defaultValue));
+    }
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        id("order"), "ORDER", juce::StringArray{"PARALLEL", "VCW>VCF", "VCF>VCW"}, 0));
+
+    layout.add(std::make_unique<Float>(
+        id("tempo"), "TEMPO", exponentialRange(cal::kTempoMinStepsPerMinute, cal::kTempoMaxStepsPerMinute),
+        cal::kTempoDefaultStepsPerMinute));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         id("sync_mode"), "SYNC", juce::StringArray{"INTERNAL", "HOST"}, kSyncHost));
     layout.add(std::make_unique<Int>(id("clock_div"), "DIVISION", 1, 16, 1));
@@ -48,6 +98,9 @@ DedaleProcessor::DedaleProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "DEDALE", createParameterLayout())
 {
+    for (std::size_t i = 0; i < kContinuous.size(); ++i)
+        continuousParams[i] = apvts.getRawParameterValue(kContinuous[i].id);
+    orderParam = apvts.getRawParameterValue("order");
     tempoParam = apvts.getRawParameterValue("tempo");
     syncModeParam = apvts.getRawParameterValue("sync_mode");
     clockDivParam = apvts.getRawParameterValue("clock_div");
@@ -72,11 +125,25 @@ void DedaleProcessor::seedSequencer(std::uint32_t seed) noexcept
 
 void DedaleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    maxChunk = juce::jmax(1, samplesPerBlock);
+    oversampling = std::make_unique<juce::dsp::Oversampling<float>>(
+        1, static_cast<size_t>(cal::kOversamplingStages),
+        juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR);
+    oversampling->initProcessing(static_cast<size_t>(maxChunk));
+    scratch.setSize(1, maxChunk);
+
     internalClock.prepare(sampleRate);
     hostClock.reset();
-    for (auto& beep : beeps)
-        beep.prepare(sampleRate, samplesPerBlock);
+    eg1.prepare(sampleRate, maxChunk);
+    eg2.prepare(sampleRate, maxChunk);
+    voice.prepare(sampleRate * static_cast<double>(oversampling->getOversamplingFactor()), maxChunk);
+    voice.reset();
     wasRunning = false;
+
+    smoothingCoefficient =
+        1.0f - std::exp(-1.0f / (cal::kParamSmoothingSeconds * static_cast<float>(sampleRate)));
+    for (std::size_t i = 0; i < smoothed.size(); ++i)
+        smoothed[i] = continuousParams[i]->load(); // pas de glissement au démarrage
 }
 
 void DedaleProcessor::releaseResources() {}
@@ -105,6 +172,8 @@ void DedaleProcessor::pullParameters() noexcept
         seq.setCorrupt(static_cast<int>(lane), corruptParams[lane]->load());
         seq.setCvRange(static_cast<int>(lane), rangeParams[lane]->load());
     }
+    for (std::size_t i = 0; i < targets.size(); ++i)
+        targets[i] = continuousParams[i]->load();
 }
 
 // Sync hôte : seulement quand SYNC = HOST et que le transport tourne ; sinon l'horloge interne prend le
@@ -135,22 +204,45 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
+    if (oversampling == nullptr)
+        return;
 
     pullParameters();
     const auto useHost = startHostClock();
+
+    // Par tranches d'au plus la taille de bloc annoncée : le suréchantillonneur est dimensionné pour elle.
+    auto* output = buffer.getWritePointer(0);
+    auto event = midi.cbegin();
+    for (int offset = 0; offset < buffer.getNumSamples(); offset += maxChunk)
+        renderChunk(output + offset, juce::jmin(maxChunk, buffer.getNumSamples() - offset), event,
+                    midi.cend(), offset, useHost);
+
+    for (int channel = 1; channel < buffer.getNumChannels(); ++channel)
+        buffer.copyFrom(channel, 0, buffer, 0, 0, buffer.getNumSamples()); // signal mono dupliqué (§1)
+    midi.clear();
+}
+
+// Séquenceur et enveloppes à la fréquence de base ; sources, VCW et VCF dans le bloc suréchantillonné (§12).
+void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBufferIterator& event,
+                                  const juce::MidiBufferIterator& lastEvent, int offset,
+                                  bool useHost) noexcept
+{
     const auto division = juce::roundToInt(clockDivParam->load());
     const auto stepsPerMinute = static_cast<double>(tempoParam->load());
+    const auto order = static_cast<dedale::Order>(juce::roundToInt(orderParam->load()));
+    const auto factor = static_cast<int>(oversampling->getOversamplingFactor());
 
-    const auto stereo = buffer.getNumChannels() > 1;
-    auto* left = buffer.getWritePointer(0);
-    auto* right = stereo ? buffer.getWritePointer(1) : nullptr;
-    auto event = midi.cbegin();
+    scratch.clear(0, 0, numSamples);
+    juce::dsp::AudioBlock<float> base(scratch.getArrayOfWritePointers(), 1, static_cast<size_t>(numSamples));
+    auto oversampled = oversampling->processSamplesUp(base);
+    auto* fast = oversampled.getChannelPointer(0);
 
-    for (int i = 0; i < buffer.getNumSamples(); ++i)
+    for (int i = 0; i < numSamples; ++i)
     {
-        // Note On : transpose la fondamentale du quantizer ; à l'arrêt, déclenche aussi un trigger (§8.7).
+        // Note On : transpose la fondamentale du quantizer ; à l'arrêt, déclenche aussi les enveloppes
+        // (§8.7).
         auto manualTrigger = false;
-        for (; event != midi.cend() && (*event).samplePosition <= i; ++event)
+        for (; event != lastEvent && (*event).samplePosition <= offset + i; ++event)
         {
             if (const auto message = (*event).getMessage(); message.isNoteOn())
             {
@@ -159,31 +251,59 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
         }
 
+        for (std::size_t p = 0; p < smoothed.size(); ++p)
+            smoothed[p] += (targets[p] - smoothed[p]) * smoothingCoefficient;
+
         // CLOCK 2 est normalisé sur CLOCK 1 : les deux lanes reçoivent le même tick (jacks en phase 4).
         const auto internalTick = internalClock.processSample(stepsPerMinute);
         const auto tick = useHost ? hostClock.processSample(division) : internalTick;
+        const auto trigger1 = tick && seq.tick(0);
+        const auto trigger2 = tick && seq.tick(1);
 
-        std::array<float, dedale::kNumLanes> voice{};
-        for (std::size_t lane = 0; lane < voice.size(); ++lane)
-        {
-            const auto laneIndex = static_cast<int>(lane);
-            if ((tick && seq.tick(laneIndex)) || manualTrigger)
-                beeps[lane].trigger();
-            voice[lane] = beeps[lane].processSample(seq.cv(laneIndex));
-        }
+        // EG TRIG MIX : vélocité de chaque flux de triggers ; sur un même pas, la plus forte gagne (§7).
+        const auto mix = smoothed[egTrigMix];
+        const auto velocity = manualTrigger
+                                  ? 1.0f
+                                  : juce::jmax(trigger1 ? juce::jmin(1.0f, 2.0f * (1.0f - mix)) : 0.0f,
+                                               trigger2 ? juce::jmin(1.0f, 2.0f * mix) : 0.0f);
+        eg1.trigger(velocity);
+        eg2.trigger(velocity);
 
-        if (stereo)
-        {
-            left[i] = voice[0] * cal::kBeepPan + voice[1] * (1.0f - cal::kBeepPan);
-            right[i] = voice[0] * (1.0f - cal::kBeepPan) + voice[1] * cal::kBeepPan;
-        }
-        else
-        {
-            left[i] = 0.5f * (voice[0] + voice[1]);
-        }
+        dedale::VoiceParams params;
+        params.vcoFreq = smoothed[vcoFreq];
+        params.vcoEg1Amt = smoothed[vcoEg1Amt];
+        params.vcoSeq1Amt = smoothed[vcoSeq1Amt];
+        params.mvcoFreq = smoothed[mvcoFreq];
+        params.mvcoEg1Amt = smoothed[mvcoEg1Amt];
+        params.mvcoSeq2Amt = smoothed[mvcoSeq2Amt];
+        params.fmAmt = smoothed[mvcoFmAmt];
+        params.mixVco = smoothed[mixVco];
+        params.mixRing = smoothed[mixRing];
+        params.mixMvco = smoothed[mixMvco];
+        params.mixNoise = smoothed[mixNoise];
+        params.noiseTone = smoothed[noiseTone];
+        params.fold = smoothed[vcwFold];
+        params.bias = smoothed[vcwBias];
+        params.vcwEg1Amt = smoothed[vcwEg1Amt];
+        params.vcwSeq1Amt = smoothed[vcwSeq1Amt];
+        params.cutoff = smoothed[vcfCutoff];
+        params.vcfEg1Amt = smoothed[vcfEg1Amt];
+        params.vcfSeq2Amt = smoothed[vcfSeq2Amt];
+        params.resonance = smoothed[vcfRes];
+        params.filterMode = smoothed[vcfMode];
+        params.order = order;
+        params.blend = smoothed[blend];
+        params.volume = smoothed[volume];
+
+        const dedale::VoiceCv cv{seq.cv(0), seq.cv(1), eg1.processSample(smoothed[eg1Decay]),
+                                 eg2.processSample(smoothed[eg2Decay])};
+        voice.setControls(params, cv);
+        for (int k = 0; k < factor; ++k)
+            fast[i * factor + k] = voice.processSample();
     }
 
-    midi.clear();
+    juce::dsp::AudioBlock<float> result(&output, 1, static_cast<size_t>(numSamples));
+    oversampling->processSamplesDown(result);
 }
 
 juce::AudioProcessorEditor* DedaleProcessor::createEditor()
@@ -191,7 +311,7 @@ juce::AudioProcessorEditor* DedaleProcessor::createEditor()
     return new DedaleEditor(*this);
 }
 
-// Phase 2 : seuls les paramètres sont sauvegardés. Séquence, buffer et réglages globaux : phase 6 (§10).
+// Seuls les paramètres sont sauvegardés pour l'instant. Séquence, buffer et réglages globaux : phase 6 (§10).
 void DedaleProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     if (const auto xml = apvts.copyState().createXml())

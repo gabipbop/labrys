@@ -104,3 +104,29 @@ son horloge et son CV RANGE. Le reste est interprété :
 - **Constat** : le Python système n'a ni numpy ni scipy. **Décision** : environnement local `tools/.venv`
   (gitignoré), créé par `python3 -m venv tools/.venv && tools/.venv/bin/pip install numpy scipy matplotlib`.
 - La mesure d'aliasing (§15.6) arrivera avec les oscillateurs (phase 3).
+
+## ADR-015 — Voix : structure et hypothèses (2026-11-15)
+- **Structure** : un module par étage dans `Source/DSP` (sans JUCE, dans `dedale_core`), assemblés par `Voice` avec
+  les normalisations par défaut en dur. Le processor fait tourner séquenceur et enveloppes à la fréquence de base,
+  appelle `Voice::setControls()` une fois par échantillon de base, puis `Voice::processSample()` ×4 dans un bloc
+  `juce::dsp::Oversampling` (demi-bandes IIR polyphase, 2 étages). Les contrôles sont tenus pendant les 4
+  sous-échantillons. La latence du suréchantillonneur (quelques échantillons) n'est pas déclarée à l'hôte.
+- **Écart à la spec §6** : DC-block **avant** l'écrêtage de sécurité (et non après), pour garantir une sortie dans
+  ±1. L'écrêtage est transparent jusqu'à `kOutputClipKneeVolts` ; `kOutputHeadroom` garde le patch init dessous.
+- **EG TRIG MIX** : chaque flux est à 100 % jusqu'à midi puis descend vers 0 (les deux à 100 % à midi), au lieu d'un
+  fondu linéaire qui donnerait 50 % chacun à midi.
+- **Filtre** : résonance à 0 = Butterworth (−3 dB au cutoff) ; à fond, Q ≈ 8 sans auto-oscillation. Le passe-bande
+  est compensé en `√` de l'amortissement : gain unité sans résonance, pic modéré avec.
+- **Wavefolder** : deux plis triangulaires à coins arrondis (`asin(c·sin)`), second étage plus poussé et légèrement
+  décalé quand FOLD monte. Variante `sine` gardée derrière `kFolderModel`. Le taux d'harmoniques n'est pas monotone
+  avec FOLD (les plis annulent la fondamentale à certains réglages) : c'est le comportement normal d'un folder.
+- **Modulations** : EG1 vers les hauteurs = 0,5 octave par volt à fond (4 octaves) ; EG1 et SEQ2 vers le cutoff =
+  1 V/octave ; EG1 et SEQ1 vers FOLD ramenés à la course du knob.
+- **Golden tests en C++** (`DedaleGoldenTests`) plutôt qu'avec `analyse.py` : la CI n'a pas besoin de Python.
+  Ils rendent les 4 premières secondes des 14 scénarios et comparent crête, RMS, DC et passages à zéro.
+- **Aliasing mesuré** : −32,7 dB d'énergie non harmonique sur `alias_fold_high` (2,5 kHz, FOLD à fond, ×4), le cas
+  le plus dur. À réévaluer avec le mode ×8 (phase 6) si c'est audible.
+- **Reporté** : drift analogique, interrupteur de coloration du VCW, qualité d'oversampling réglable (phase 6) ;
+  U MIX et `umix1_lvl`, SYNC du MOD VCO, entrées audio directes (phase 4, ils n'ont de sens qu'avec les jacks) ;
+  bouton TRIGGER (phase 5 ; d'ici là, un Note On à l'arrêt déclenche les deux enveloppes).
+- Phase démarrée à la demande de Gaby avant ses réponses au checkpoint de la phase 2.

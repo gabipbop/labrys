@@ -5,6 +5,7 @@ Installation (une fois) :
     python3 -m venv tools/.venv && tools/.venv/bin/pip install numpy scipy matplotlib
 Usage :
     tools/.venv/bin/python -I tools/analyse.py renders/*.wav [--png dossier] [--grid secondes]
+    tools/.venv/bin/python -I tools/analyse.py renders/alias_fold_high.wav --f0 2500   # mesure d'aliasing
 
 Code de sortie 1 si un fichier contient des NaN/Inf ou est silencieux.
 """
@@ -16,8 +17,10 @@ import sys
 import numpy as np
 from scipy import signal
 from scipy.io import wavfile
+from scipy.ndimage import uniform_filter1d
 
-CLICK_THRESHOLD = 0.5  # dérivée seconde, en pleine échelle
+CLICK_THRESHOLD = 0.1  # dérivée seconde minimale, en pleine échelle
+CLICK_RATIO = 8.0  # ... et ce multiple de son niveau RMS local (10 ms) : un clic est isolé, un timbre brillant non
 SILENCE_DB = -60.0
 ONSET_FLOOR_DB = -40.0
 ONSET_RATIO = 4.0  # l'enveloppe doit quadrupler en 5 ms
@@ -50,7 +53,18 @@ def onsets(mono, rate):
     return times
 
 
-def analyse(path, grid):
+def inharmonic_db(mono, rate, f0):
+    """Aliasing : part de l'énergie qui ne tombe sur aucun harmonique de f0 (note tenue), en dB."""
+    segment = mono[len(mono) // 4 : 3 * len(mono) // 4]
+    power = np.abs(np.fft.rfft(segment * np.blackman(len(segment)))) ** 2
+    freqs = np.fft.rfftfreq(len(segment), 1.0 / rate)
+    nearest = np.round(freqs / f0) * f0
+    harmonic = (np.abs(freqs - nearest) < 30.0) & (nearest > 0)
+    audible = freqs > 30.0
+    return 10.0 * np.log10(max(power[audible & ~harmonic].sum(), 1e-30) / max(power[audible].sum(), 1e-30))
+
+
+def analyse(path, grid, f0=None):
     rate, data = load(path)
     finite = bool(np.isfinite(data).all())
     data = np.nan_to_num(data)
@@ -62,7 +76,9 @@ def analyse(path, grid):
     freqs = np.fft.rfftfreq(len(mono), 1.0 / rate)
     centroid = float((spectrum * freqs).sum() / max(spectrum.sum(), 1e-12))
 
-    second = np.abs(np.diff(data, n=2, axis=0))
+    second = np.abs(np.diff(mono, n=2))
+    local = np.sqrt(np.maximum(uniform_filter1d(second**2, size=max(rate // 100, 1)), 0.0))
+    clicks = (second > CLICK_THRESHOLD) & (second > CLICK_RATIO * local)
     times = onsets(mono, rate)
     result = {
         "file": os.path.basename(path),
@@ -73,7 +89,7 @@ def analyse(path, grid):
         "crest_db": round(db(peak) - db(rms), 2),
         "dc": round(float(mono.mean()), 6),
         "centroid_hz": round(centroid, 1),
-        "clicks": int((second > CLICK_THRESHOLD).sum()),
+        "clicks": int(clicks.sum()),
         "silent": bool(db(peak) < SILENCE_DB),
         "onsets": len(times),
     }
@@ -81,6 +97,8 @@ def analyse(path, grid):
         # Écart de chaque attaque à la grille des pas (l'attaque du bip met environ 1 ms à sortir du seuil).
         error = [abs(t / grid - round(t / grid)) * grid for t in times]
         result["onset_grid_error_ms"] = round(1000.0 * max(error), 2)
+    if f0:
+        result["inharmonic_db"] = round(float(inharmonic_db(mono, rate, f0)), 1)
     return result, rate, mono
 
 
@@ -94,7 +112,7 @@ def spectrogram(path, rate, mono, directory):
     figure, axis = plt.subplots(figsize=(12, 4))
     axis.pcolormesh(t, f, 10.0 * np.log10(power + 1e-12), vmin=-120, vmax=-30, shading="auto", cmap="magma")
     axis.set_yscale("symlog", linthresh=200)
-    axis.set_ylim(40, 8000)
+    axis.set_ylim(40, 20000)
     axis.set_xlabel("s")
     axis.set_ylabel("Hz")
     axis.set_title(os.path.basename(path))
@@ -109,11 +127,12 @@ def main():
     parser.add_argument("files", nargs="+")
     parser.add_argument("--png", metavar="DOSSIER", help="écrit un spectrogramme PNG par fichier")
     parser.add_argument("--grid", type=float, metavar="S", help="durée d'un pas : mesure l'écart des attaques à la grille")
+    parser.add_argument("--f0", type=float, metavar="HZ", help="note tenue à HZ : mesure l'énergie non harmonique (aliasing)")
     args = parser.parse_args()
 
     failed = False
     for path in args.files:
-        result, rate, mono = analyse(path, args.grid)
+        result, rate, mono = analyse(path, args.grid, args.f0)
         print(json.dumps(result, ensure_ascii=False))
         failed = failed or not result["finite"] or result["silent"]
         if args.png:

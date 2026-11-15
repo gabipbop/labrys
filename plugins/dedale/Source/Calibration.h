@@ -33,9 +33,52 @@ inline constexpr float kTempoDefaultStepsPerMinute = 120.0f;
 // Hypothèse : division N = un pas dure N doubles croches (division 1 = 1/16, soit 6 impulsions à 24 PPQN).
 inline constexpr double kHostQuartersPerStepAtDivision1 = 0.25;
 
-// --- Bip de debug de la phase 2 (remplacé par la voix en phase 3) ---
-inline constexpr float kBeepFrequencyAtZeroVolt = 261.63f; // do 4, puis 1 V/octave
-inline constexpr float kBeepDecaySeconds = 0.12f;
-inline constexpr float kBeepLevel = 0.3f;
-inline constexpr float kBeepPan = 0.7f; // part de SEQ1 à gauche et de SEQ2 à droite en stéréo
+// --- Hauteurs et FM (§3) ---
+inline constexpr float kEgMaxVolts = 8.0f;    // crête des enveloppes
+inline constexpr float kQtzZoneStart = 0.97f; // SEQ AMT : derniers 3 % = gain verrouillé à 1 (cran QTZ)
+inline constexpr float kEgPitchOctavesPerVolt = 0.5f; // EG1 AMT à fond : 4 octaves de balayage
+inline constexpr float kTzfmMaxIndex = 4.0f;          // profondeur de TZFM avec FM AMT à fond
+
+// --- Bruit (§3.4) ---
+inline constexpr float kNoiseMinHz = 100.0f;
+inline constexpr float kNoiseMaxHz = 12000.0f;
+inline constexpr float kNoiseQ = 0.7f;
+inline constexpr float kNoiseRmsVolts = 1.7f;
+
+// --- Mixeur saturant (§3.5), niveaux normalisés (1 = 5 V) ---
+inline constexpr float kMixerMaxGain = 5.0f;        // gain d'un canal en butée (1 à midi)
+inline constexpr float kMixerChannelCeiling = 1.5f; // plafond de saturation d'un canal
+inline constexpr float kMixerSumCeiling = 2.0f;     // plafond de la somme
+inline constexpr float kMixerAsymmetry = 0.1f;      // offset avant saturation : harmoniques paires
+
+// --- Wavefolder (§4) ---
+enum class FolderModel
+{
+    softTwoStage, // deux plis triangulaires à coins adoucis
+    sine          // pli sinus simple, pour comparaison
+};
+inline constexpr FolderModel kFolderModel = FolderModel::softTwoStage;
+inline constexpr float kVcwInputGain = 0.7f;        // gain d'entrée à FOLD = 0 (sous le premier pli)
+inline constexpr float kVcwFoldGain = 9.0f;         // gain ajouté avec FOLD à fond
+inline constexpr float kVcwStage2Gain = 1.5f;       // gain ajouté avant le second étage avec FOLD à fond
+inline constexpr float kVcwBiasRange = 1.0f;        // offset avec BIAS en butée
+inline constexpr float kVcwCornerSharpness = 0.97f; // 1 = coins vifs, plus bas = coins ronds
+inline constexpr float kVcwAsymmetry = 0.05f;       // offset entre les étages, proportionnel à FOLD
+inline constexpr bool kVcwZeroColour = true;        // coloration résiduelle à FOLD = 0
+inline constexpr float kVcwZeroColourDrive = 0.4f;
+inline constexpr float kVcwOutputDrive = 0.8f; // saturation finale
+
+// --- Filtre (§5) ---
+inline constexpr float kVcfMinDamping = 0.12f;        // 1/Q à résonance max (Q ≈ 8, pas d'auto-oscillation)
+inline constexpr float kVcfStateCeilingVolts = 12.0f; // niveau où les intégrateurs saturent
+inline constexpr float kCutoffOctavesPerVolt = 1.0f;
+
+// --- VCA, enveloppes, sortie (§6, §7) ---
+inline constexpr float kVcaExponent = 1.5f;        // 1 = linéaire
+inline constexpr float kEgAttackSeconds = 0.0007f; // micro-attaque anti-clic
+inline constexpr float kEgSmoothingHz = 2000.0f;   // lissage de la CV de sortie
+inline constexpr float kOutputHeadroom = 0.7f;     // gain avant la sortie : le patch init reste sous le genou
+inline constexpr float kOutputClipKneeVolts = 3.5f; // l'écrêtage de sécurité commence ici, plafond à 5 V
+inline constexpr int kOversamplingStages = 2;       // ×4 (réglable en phase 6)
+inline constexpr float kParamSmoothingSeconds = 0.02f;
 } // namespace dedale::calibration
