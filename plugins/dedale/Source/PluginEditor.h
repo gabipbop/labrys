@@ -4,7 +4,7 @@
 
 class DedaleProcessor;
 
-// Phase 1 : panneau provisoire. Le vrai panneau arrive en phase 5.
+// Panneau provisoire. Le vrai panneau arrive en phase 5.
 class DedaleEditor final : public juce::AudioProcessorEditor
 {
 public:

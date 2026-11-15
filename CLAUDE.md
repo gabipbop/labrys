@@ -38,6 +38,8 @@ cmake --preset release && cmake --build --preset release && ctest --preset relea
 git ls-files '*.cpp' '*.h' | xargs clang-format -i                              # formatage
 tools/pluginval.sh build/release/plugins/dedale/Dedale_artefacts/Release/VST3/Dedale.vst3 10  # pluginval
 auval -v aumu Ddle Rwps                                                         # AU (après build debug, qui installe)
+build/debug/plugins/dedale/DedaleRender renders 7                                # rendus WAV (dossier, seed)
+tools/.venv/bin/python -I tools/analyse.py renders/*.wav --grid 0.25 --png renders/spectrograms  # mesures
 ```
 Dépendances via `FetchContent` à **tag figé** (jamais `main`), partagées dans `build/_deps`.
 Versions figées : JUCE 8.0.15, Catch2 v3.8.1, pluginval v1.0.4.
@@ -50,6 +52,7 @@ Versions figées : JUCE 8.0.15, Catch2 v3.8.1, pluginval v1.0.4.
 - `juce::ScopedNoDenormals` dans `processBlock`.
 - Oversampling : sources + VCW + VCF dans un seul bloc suréchantillonné ; séquenceur et enveloppes à la fréquence de base.
 - IDs de paramètres APVTS en `snake_case`, **jamais renommés** après la v1.
+- Logique pure (séquenceur, quantizer, horloges) dans la bibliothèque `dedale_core`, sans aucun include JUCE.
 - Constantes à calibrer à l'oreille : toutes dans `Calibration.h`, documentées dans `docs/CALIBRATION.md`.
 - Zéro warning. Style : `.clang-format` (Allman, 4 espaces, 110 colonnes).
 
@@ -77,7 +80,7 @@ Si un job est refusé pour facturation, prévenir Gaby au lieu de relancer.
 Si une étape échoue deux fois pour la même raison : s'arrêter, résumer dans `PROGRESS.md`, demander à Gaby.
 
 ## Vérifier le son sans l'écouter (§15.6)
-Cible `DedaleRender` (WAV 48 kHz/24 bits dans `renders/`), `tools/analyse.py` (lancé avec `python3 -I`),
+Cible `DedaleRender` (WAV 48 kHz/24 bits dans `renders/`), `tools/analyse.py` (environnement `tools/.venv`, ADR-014),
 golden tests en métriques JSON (changement volontaire = commit séparé et justifié), spectrogrammes PNG aux checkpoints.
 
 ## Checkpoints avec Gaby (§15.7)

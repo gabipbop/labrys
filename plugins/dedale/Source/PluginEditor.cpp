@@ -19,6 +19,7 @@ void DedaleEditor::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xff9aa0a6));
     g.setFont(juce::FontOptions(16.0f));
-    g.drawText("Squelette (phase 1) : pas encore de son.", area.removeFromTop(24),
-               juce::Justification::centredLeft);
+    g.drawText(juce::String::fromUTF8(
+                   "Phase 2 : séquenceur + bip de debug. Réglages : paramètres du plugin dans la DAW."),
+               area.removeFromTop(24), juce::Justification::centredLeft);
 }

@@ -1,6 +1,14 @@
 # DÉDALE : plugin (VST3, AU, Standalone) + tests.
 # Noms et codes : libs/ariane/cmake/SuiteIdentity.cmake
 
+# Cœur pur (aucun JUCE) : séquenceur, quantizer, horloges. Partagé par le plugin, les tests et les outils.
+add_library(dedale_core STATIC
+    Source/Sequencer/Clock.cpp
+    Source/Sequencer/GenerativeSequencer.cpp
+    Source/Sequencer/Quantizer.cpp)
+target_include_directories(dedale_core PUBLIC Source)
+target_link_libraries(dedale_core PUBLIC labrys::ariane PRIVATE ariane_warnings)
+
 juce_add_plugin(Dedale
     COMPANY_NAME "${LABRYS_VENDOR_NAME}"
     COMPANY_COPYRIGHT "${LABRYS_COMPANY_NAME}"
@@ -32,7 +40,7 @@ target_compile_definitions(Dedale PUBLIC
 
 target_link_libraries(Dedale
     PRIVATE
-        labrys::ariane
+        dedale_core
         juce::juce_audio_utils
     PUBLIC
         juce::juce_recommended_config_flags
@@ -43,8 +51,19 @@ set_source_files_properties(Source/PluginProcessor.cpp Source/PluginEditor.cpp
     TARGET_DIRECTORY Dedale
     PROPERTIES COMPILE_OPTIONS "$<TARGET_PROPERTY:ariane_warnings,INTERFACE_COMPILE_OPTIONS>")
 
+# DedaleRender : rendu hors temps réel des scénarios d'écoute (WAV dans renders/, §15.6).
+# L'outil lie le code partagé du plugin (cible statique Dedale) et reprend ses includes et définitions JUCE,
+# sans recompiler les modules.
+add_executable(DedaleRender Tools/DedaleRender.cpp)
+target_link_libraries(DedaleRender PRIVATE Dedale dedale_core ariane_warnings)
+target_include_directories(DedaleRender SYSTEM PRIVATE $<TARGET_PROPERTY:Dedale,INCLUDE_DIRECTORIES>)
+target_compile_definitions(DedaleRender PRIVATE $<TARGET_PROPERTY:Dedale,COMPILE_DEFINITIONS>)
+
 if(LABRYS_BUILD_TESTS)
-    add_executable(DedaleTests Tests/SmokeTests.cpp)
-    target_link_libraries(DedaleTests PRIVATE labrys::ariane ariane_warnings Catch2::Catch2WithMain)
+    add_executable(DedaleTests
+        Tests/ClockTests.cpp
+        Tests/QuantizerTests.cpp
+        Tests/SequencerTests.cpp)
+    target_link_libraries(DedaleTests PRIVATE dedale_core ariane_warnings Catch2::Catch2WithMain)
     catch_discover_tests(DedaleTests)
 endif()
