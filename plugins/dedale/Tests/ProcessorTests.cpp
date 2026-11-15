@@ -320,3 +320,202 @@ TEST_CASE("Presets : usine et utilisateur", "[presets]")
 
     directory.deleteRecursively();
 }
+
+namespace
+{
+// Traite un bloc avec les messages MIDI donnés (position en échantillons dans le bloc) et renvoie la sortie
+// MIDI.
+juce::MidiBuffer runBlock(DedaleProcessor& processor,
+                          std::initializer_list<std::pair<juce::MidiMessage, int>> events = {})
+{
+    juce::AudioBuffer<float> block(2, render::kBlockSize);
+    juce::MidiBuffer midi;
+    for (const auto& [message, position] : events)
+        midi.addEvent(message, position);
+    processor.processBlock(block, midi);
+    return midi;
+}
+
+void prepare(DedaleProcessor& processor)
+{
+    processor.setPlayConfigDetails(0, 2, render::kSampleRate, render::kBlockSize);
+    processor.prepareToPlay(render::kSampleRate, render::kBlockSize);
+    runBlock(processor); // applique paramètres et état en attente
+}
+
+// Envoie des impulsions d'horloge MIDI, une par bloc.
+void sendClock(DedaleProcessor& processor, int pulses)
+{
+    for (int i = 0; i < pulses; ++i)
+        runBlock(processor, {{juce::MidiMessage::midiClock(), 10}});
+}
+} // namespace
+
+TEST_CASE("MIDI : horloge, Start, Stop, Continue, Song Position", "[midi]")
+{
+    DedaleProcessor processor;
+    processor.seedSequencer(5);
+    render::set(processor, "sync_mode", 0.0f);
+    render::set(processor, "tempo",
+                10.0f); // horloge interne très lente : elle ne doit jamais avancer le séquenceur ici
+    prepare(processor);
+    const auto head = [&] { return processor.sequencerState().lanes[0].playHead; };
+    const auto running = [&] { return processor.display.running.load(); };
+
+    REQUIRE_FALSE(running());
+    runBlock(processor, {{juce::MidiMessage::midiStart(), 0}});
+    REQUIRE(running());
+    REQUIRE(head() == 0);
+
+    // Start : la première impulsion joue le pas 1, puis un pas toutes les 6 impulsions.
+    sendClock(processor, 1);
+    REQUIRE(head() == 0);
+    sendClock(processor, 6);
+    REQUIRE(head() == 1);
+    sendClock(processor, 12);
+    REQUIRE(head() == 3);
+
+    SECTION("la division allonge le pas")
+    {
+        render::set(processor, "clock_div", 4.0f);
+        runBlock(processor, {{juce::MidiMessage::midiStart(), 0}});
+        sendClock(processor, 1 + 24 * 2);
+        REQUIRE(head() == 2); // deux noires
+    }
+
+    SECTION("Stop arrête, Continue reprend sans revenir au pas 1")
+    {
+        runBlock(processor, {{juce::MidiMessage::midiStop(), 0}});
+        REQUIRE_FALSE(running());
+        sendClock(processor, 12);
+        REQUIRE(head() == 3);
+
+        runBlock(processor, {{juce::MidiMessage::midiContinue(), 0}});
+        REQUIRE(running());
+        sendClock(processor, 6);
+        REQUIRE(head() == 4);
+
+        // Le paramètre RUN vu par la DAW suit ce que le MIDI a décidé.
+        processor.syncParametersFromSequencer();
+        REQUIRE(processor.apvts.getRawParameterValue("run")->load() == 1.0f);
+        runBlock(processor, {{juce::MidiMessage::midiStop(), 0}});
+        processor.syncParametersFromSequencer();
+        REQUIRE(processor.apvts.getRawParameterValue("run")->load() == 0.0f);
+        runBlock(processor);
+        REQUIRE_FALSE(running()); // et le paramètre ne relance rien
+    }
+
+    SECTION("Song Position 0 ramène au pas 1 ; les autres positions sont ignorées")
+    {
+        runBlock(processor, {{juce::MidiMessage::songPositionPointer(8), 0}});
+        REQUIRE(head() == 3);
+        runBlock(processor, {{juce::MidiMessage::songPositionPointer(0), 0}});
+        REQUIRE(head() == 0);
+        REQUIRE(running());
+    }
+}
+
+TEST_CASE("MIDI : notes entrantes et canal", "[midi]")
+{
+    DedaleProcessor processor;
+    processor.seedSequencer(5);
+    prepare(processor);
+    const auto root = [&] { return processor.sequencerState().rootSemitones; };
+    const auto envelope = [&]
+    {
+        juce::AudioBuffer<float> block(2, render::kBlockSize);
+        juce::MidiBuffer midi;
+        processor.processBlock(block, midi);
+        return block.getMagnitude(0, block.getNumSamples());
+    };
+
+    SECTION("omni : une note transpose la fondamentale et, à l'arrêt, déclenche les enveloppes")
+    {
+        REQUIRE(envelope() == 0.0f);
+        runBlock(processor, {{juce::MidiMessage::noteOn(9, 64, 0.8f), 0}});
+        REQUIRE(root() == 4); // mi 4 : une tierce majeure au-dessus du do
+        REQUIRE(envelope() > 0.01f);
+    }
+
+    SECTION("canal choisi : les autres canaux sont ignorés")
+    {
+        auto settings = processor.settings();
+        settings.midiChannel = 3;
+        processor.setSettings(settings);
+        runBlock(processor, {{juce::MidiMessage::noteOn(5, 72, 0.8f), 0}});
+        REQUIRE(root() == 0);
+        REQUIRE(envelope() == 0.0f);
+        runBlock(processor, {{juce::MidiMessage::noteOn(3, 72, 0.8f), 0}});
+        REQUIRE(root() == 12);
+    }
+}
+
+TEST_CASE("MIDI : sortie des séquences en notes", "[midi]")
+{
+    DedaleProcessor processor;
+    processor.seedSequencer(render::kDefaultSeed);
+    render::internalClock(processor); // 4 pas par seconde
+    render::set(processor, "eg_trig_mix", 0.5f);
+    prepare(processor);
+
+    const auto collect = [&](int blocks)
+    {
+        std::vector<juce::MidiMessage> messages;
+        for (int i = 0; i < blocks; ++i)
+            for (const auto metadata : runBlock(processor))
+                messages.push_back(metadata.getMessage());
+        return messages;
+    };
+
+    SECTION("désactivée par défaut : rien ne sort")
+    {
+        REQUIRE(collect(200).empty());
+    }
+
+    SECTION("activée : une note par trigger, coupée ensuite, SEQ2 sur le canal suivant")
+    {
+        auto settings = processor.settings();
+        settings.midiOut = true;
+        processor.setSettings(settings);
+        const auto messages = collect(375); // 4 s : deux boucles de 8 pas
+
+        int on1 = 0, on2 = 0, off = 0;
+        for (const auto& m : messages)
+        {
+            if (m.isNoteOn())
+            {
+                REQUIRE(m.getNoteNumber() >= 0);
+                REQUIRE(m.getNoteNumber() <= 127);
+                (m.getChannel() == 1 ? on1 : on2) += 1;
+                REQUIRE((m.getChannel() == 1 || m.getChannel() == 2));
+            }
+            off += m.isNoteOff() ? 1 : 0;
+        }
+        // Motifs de la seed 7 : SEQ1 .xx.xx.x (5 pas actifs), SEQ2 .x.xxx.x (5 pas actifs), deux boucles
+        // chacun.
+        REQUIRE(on1 == 10);
+        REQUIRE(on2 == 10);
+        REQUIRE(off >= on1 + on2 - 2); // les dernières notes peuvent encore tenir
+
+        // Couper la sortie éteint les notes en cours et plus rien ne sort.
+        settings.midiOut = false;
+        processor.setSettings(settings);
+        collect(20);
+        REQUIRE(collect(100).empty());
+    }
+
+    SECTION("les notes suivent la CV quantifiée : en majeur, toutes dans la gamme de do")
+    {
+        auto settings = processor.settings();
+        settings.midiOut = true;
+        processor.setSettings(settings);
+        for (const auto& m : collect(375))
+        {
+            if (!m.isNoteOn())
+                continue;
+            const auto degree = m.getNoteNumber() % 12;
+            REQUIRE((degree == 0 || degree == 2 || degree == 4 || degree == 5 || degree == 7 || degree == 9 ||
+                     degree == 11));
+        }
+    }
+}

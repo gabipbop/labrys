@@ -76,6 +76,7 @@ void Engine::processControl(const EngineParams& params, bool masterClock, bool m
 
     const auto trigger1 = clock1 && seq.tick(0);
     const auto trigger2 = clock2 && seq.tick(1);
+    triggers = {trigger1, trigger2};
 
     // --- Enveloppes ---
     // EG TRIG MIX : vélocité de chaque flux de triggers ; sur un même pas, la plus forte gagne (§7).

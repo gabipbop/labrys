@@ -131,6 +131,9 @@ private:
     void applyCables() noexcept;
     void publishDisplay() noexcept;
     void exchangeSequencerState() noexcept;
+    void setRunning(bool shouldRun) noexcept;
+    void handleMidi(const juce::MidiMessage& message, bool& midiTick, bool& manualTrigger) noexcept;
+    void emitMidiNotes(int samplePosition) noexcept;
     void rebuildOversampling();
     void timerCallback() override { syncParametersFromSequencer(); }
     bool startHostClock() noexcept;
@@ -140,6 +143,7 @@ private:
     dedale::Engine engine;
     dedale::InternalClock internalClock;
     dedale::HostClock hostClock;
+    dedale::MidiClock midiClock;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::AudioBuffer<float>
         scratch; // un canal, à la fréquence de base : entrée (vide) du suréchantillonneur
@@ -164,7 +168,12 @@ private:
     // changent, pour ne pas écraser un rappel de buffer.
     int lastQuantParam = -1;
     int lastChainParam = -1;
-    bool wasRunning = false;
+    int lastRunParam = -1;
+
+    // Sortie MIDI : une note par trigger de séquenceur, coupée après une courte durée.
+    juce::MidiBuffer midiOutput;
+    std::array<int, dedale::kNumLanes> activeNote{-1, -1};
+    std::array<int, dedale::kNumLanes> noteSamplesLeft{};
 
     // FIFO des actions de boutons (un producteur : l'interface ; un consommateur : l'audio).
     static constexpr int kActionCapacity = 64;

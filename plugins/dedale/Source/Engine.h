@@ -37,6 +37,8 @@ public:
 
     // masterClock : tick de l'horloge interne/hôte. manualTrigger : bouton TRIGGER ou Note On à l'arrêt.
     void processControl(const EngineParams& params, bool masterClock, bool manualTrigger) noexcept;
+    // Triggers de SEQ1 et SEQ2 produits par le dernier processControl (pour la sortie MIDI).
+    std::array<bool, kNumLanes> lastTriggers() const noexcept { return triggers; }
     float processAudio() noexcept { return voice.processSample(bay); } // sortie ±1.0
 
 private:
@@ -59,6 +61,7 @@ private:
     std::array<int, kNumLanes> trigPulse{}; // échantillons restants des impulsions SEQ TRIG
     int clockPulse = 0;
     bool resetRecallsBuffer = false;
+    std::array<bool, kNumLanes> triggers{};
     int pulseSamples = 48;
 };
 } // namespace dedale

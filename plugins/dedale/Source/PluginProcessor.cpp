@@ -165,7 +165,9 @@ void DedaleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     internalClock.prepare(sampleRate);
     hostClock.reset();
     rebuildOversampling();
-    wasRunning = false;
+    midiClock.prepare(sampleRate);
+    midiOutput.ensureSize(4096);
+    activeNote = {-1, -1};
 
     smoothingCoefficient =
         1.0f - std::exp(-1.0f / (cal::kParamSmoothingSeconds * static_cast<float>(sampleRate)));
@@ -193,11 +195,9 @@ bool DedaleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 
 void DedaleProcessor::pullParameters() noexcept
 {
-    const auto running = runParam->load() > 0.5f;
-    engine.sequencer().setRunning(running);
-    if (running && !wasRunning)
-        internalClock.reset(); // le premier pas tombe dès l'appui sur RUN
-    wasRunning = running;
+    // RUN : le paramètre n'est appliqué que lorsqu'il change, pour ne pas écraser un Start ou un Stop MIDI.
+    if (const auto run = runParam->load() > 0.5f ? 1 : 0; run != lastRunParam)
+        setRunning((lastRunParam = run) == 1);
 
     if (const auto mode = juce::roundToInt(quantModeParam->load()) - 1; mode != lastQuantParam)
         engine.sequencer().setQuantizerMode(lastQuantParam = mode);
@@ -263,13 +263,98 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     for (int channel = 1; channel < buffer.getNumChannels(); ++channel)
         buffer.copyFrom(channel, 0, buffer, 0, 0, buffer.getNumSamples()); // signal mono dupliqué (§1)
-    midi.clear();
+    midi.swapWith(midiOutput); // ce qui sort : les notes des séquenceurs, si la sortie MIDI est activée
+    midiOutput.clear();
 
     // Oscilloscope : si l'interface ne lit pas, on arrête d'écrire (elle rattrapera au prochain bloc).
     const auto scope = scopeFifo.write(juce::jmin(buffer.getNumSamples(), scopeFifo.getFreeSpace()));
     std::copy_n(output, scope.blockSize1, scopeData.begin() + scope.startIndex1);
     std::copy_n(output + scope.blockSize1, scope.blockSize2, scopeData.begin() + scope.startIndex2);
     publishDisplay();
+}
+
+// --- MIDI -------------------------------------------------------------------------------------------------
+
+void DedaleProcessor::setRunning(bool shouldRun) noexcept
+{
+    auto& seq = engine.sequencer();
+    if (shouldRun && !seq.isRunning())
+        internalClock.reset(); // le premier pas tombe dès le départ
+    seq.setRunning(shouldRun);
+    modesChanged = true; // le paramètre RUN suivra
+}
+
+void DedaleProcessor::handleMidi(const juce::MidiMessage& message, bool& midiTick,
+                                 bool& manualTrigger) noexcept
+{
+    auto& seq = engine.sequencer();
+    if (message.isMidiClock())
+    {
+        midiTick = midiClock.onPulse(juce::roundToInt(clockDivParam->load())) || midiTick;
+    }
+    else if (message.isMidiStart()) // reset + run
+    {
+        seq.reset();
+        midiClock.restart();
+        setRunning(true);
+    }
+    else if (message.isMidiStop())
+    {
+        setRunning(false);
+    }
+    else if (message.isMidiContinue()) // run sans reset
+    {
+        midiClock.arm();
+        setRunning(true);
+    }
+    else if (message.isSongPositionPointer())
+    {
+        if (message.getSongPositionPointerMidiBeat() == 0)
+        {
+            seq.reset();
+            midiClock.restart();
+        }
+    }
+    else if (message.isNoteOn() &&
+             (blockSettings.midiChannel == 0 || message.getChannel() == blockSettings.midiChannel))
+    {
+        // Note On : transpose la fondamentale du quantizer ; à l'arrêt, déclenche aussi les enveloppes
+        // (§8.7).
+        seq.setRootSemitones(message.getNoteNumber() - cal::kMidiRootNote);
+        manualTrigger = manualTrigger || !seq.isRunning();
+    }
+}
+
+// Sortie MIDI : chaque trigger de séquenceur devient une note dont la hauteur est la CV quantifiée.
+void DedaleProcessor::emitMidiNotes(int samplePosition) noexcept
+{
+    const auto base = blockSettings.midiChannel == 0 ? 1 : blockSettings.midiChannel;
+    const auto triggers = engine.lastTriggers();
+    for (std::size_t lane = 0; lane < triggers.size(); ++lane)
+    {
+        const auto channel = lane == 0 ? base : base % 16 + 1; // SEQ2 sur le canal suivant
+        auto& note = activeNote[lane];
+        const auto stop = [&]
+        {
+            if (note >= 0)
+                midiOutput.addEvent(juce::MidiMessage::noteOff(channel, note), samplePosition);
+            note = -1;
+        };
+
+        if (note >= 0 && (--noteSamplesLeft[lane] <= 0 || !blockSettings.midiOut))
+            stop();
+        if (triggers[lane] && blockSettings.midiOut)
+        {
+            stop();
+            const auto semitones = juce::roundToInt(engine.sequencer().cv(static_cast<int>(lane)) * 12.0f);
+            note = juce::jlimit(0, 127, cal::kMidiRootNote + semitones);
+            noteSamplesLeft[lane] =
+                juce::roundToInt(cal::kMidiOutGateSeconds * static_cast<float>(currentSampleRate));
+            midiOutput.addEvent(
+                juce::MidiMessage::noteOn(channel, note, static_cast<juce::uint8>(cal::kMidiOutVelocity)),
+                samplePosition);
+        }
+    }
 }
 
 // --- Pont interface ↔ audio ------------------------------------------------------------------------------
@@ -467,24 +552,20 @@ void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBuffe
 
     for (int i = 0; i < numSamples; ++i)
     {
-        // Note On : transpose la fondamentale du quantizer ; à l'arrêt, déclenche aussi les enveloppes
-        // (§8.7).
         auto manualTrigger = pendingTrigger; // bouton TRIGGER, ou ADVANCE tombé sur un pas actif
+        auto midiTick = false;
         pendingTrigger = false;
         for (; event != lastEvent && (*event).samplePosition <= offset + i; ++event)
-        {
-            if (const auto message = (*event).getMessage(); message.isNoteOn())
-            {
-                engine.sequencer().setRootSemitones(message.getNoteNumber() - cal::kMidiRootNote);
-                manualTrigger = !engine.sequencer().isRunning();
-            }
-        }
+            handleMidi((*event).getMessage(), midiTick, manualTrigger);
+        midiClock.advance();
 
         for (std::size_t p = 0; p < smoothed.size(); ++p)
             smoothed[p] += (targets[p] - smoothed[p]) * smoothingCoefficient;
 
         const auto internalTick = internalClock.processSample(stepsPerMinute);
-        const auto tick = useHost ? hostClock.processSample(division) : internalTick;
+        const auto hostTick = useHost && hostClock.processSample(division);
+        // Priorité des horloges : MIDI tant qu'elle bat, puis hôte, puis interne (§8.6).
+        const auto tick = midiClock.isActive() ? midiTick : useHost ? hostTick : internalTick;
 
         dedale::EngineParams params;
         params.eg1Decay = smoothed[eg1Decay];
@@ -520,6 +601,7 @@ void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBuffe
         v.vcwZeroColour = blockSettings.vcwZeroColour;
 
         engine.processControl(params, tick, manualTrigger);
+        emitMidiNotes(offset + i);
         for (int k = 0; k < factor; ++k)
             fast[i * factor + k] = engine.processAudio();
     }
@@ -642,6 +724,7 @@ void DedaleProcessor::syncParametersFromSequencer()
     };
     set("quant_mode", static_cast<float>(display.quantMode.load() + 1));
     set("chain", display.chained.load() ? 1.0f : 0.0f);
+    set("run", display.running.load() ? 1.0f : 0.0f);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

@@ -90,4 +90,10 @@ inline constexpr float kTriggerPulseSeconds = 0.001f; // largeur des impulsions 
 inline constexpr float kRailVolts = 10.0f;            // U MIX sature aux rails, comme le circuit
 // Hypothèse : un câble dans EG2 TRIG isole EG2, qui ne suit plus ni TRIGGER ni les triggers des séquenceurs.
 inline constexpr bool kEg2TrigJackIsolatesEg2 = true;
+
+// --- MIDI (§8.6, §8.7) ---
+inline constexpr double kMidiClockTimeoutSeconds = 5.0; // retour à l'horloge interne ou hôte après ce silence
+inline constexpr int kMidiPulsesPerStepAtDivision1 = 6; // 24 PPQN : une double croche = 6 impulsions
+inline constexpr float kMidiOutGateSeconds = 0.08f;     // durée des notes émises par la sortie MIDI
+inline constexpr int kMidiOutVelocity = 100;
 } // namespace dedale::calibration

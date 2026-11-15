@@ -41,4 +41,20 @@ bool HostClock::processSample(int division) noexcept
     ppq += increment;
     return tick;
 }
+
+void MidiClock::prepare(double newSampleRate) noexcept
+{
+    timeoutSamples = static_cast<long>(calibration::kMidiClockTimeoutSeconds * newSampleRate);
+    samplesSincePulse = timeoutSamples;
+    pulses = 0;
+}
+
+bool MidiClock::onPulse(int division) noexcept
+{
+    samplesSincePulse = 0;
+    const auto pulsesPerStep = calibration::kMidiPulsesPerStepAtDivision1 * (division < 1 ? 1 : division);
+    const auto tick = pulses % pulsesPerStep == 0;
+    pulses = (pulses + 1) % pulsesPerStep;
+    return tick;
+}
 } // namespace dedale
