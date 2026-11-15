@@ -40,7 +40,7 @@ Vérifié par Gaby dans Ableton (rangé sous LABRYS), auval et pluginval 10 OK.
 ### Questions ouvertes
 - Jacks exposés à la DAW (sorties CV, entrées sidechain), voire entre instruments : à trancher avant la phase 4.
 
-## Phase en cours : 3 — Voix (branche `phase-3-voice`, PR #4)
+## Phase 3 — Voix : mergée (v0.3.0, PR #4), réponses d'écoute encore attendues
 Démarrée à la demande de Gaby (2026-11-15) avant ses réponses au checkpoint de la phase 2 (PR 3 mergée le même
 jour à sa demande) : ses retours d'écoute seront intégrés quand ils arriveront.
 
@@ -77,6 +77,39 @@ jour à sa demande) : ses retours d'écoute seront intégrés quand ils arrivero
 - Drift analogique, interrupteur de coloration du VCW, oversampling réglable : phase 6.
 - U MIX (`umix1_lvl`), SYNC du MOD VCO, entrées audio directes : phase 4. Bouton TRIGGER : phase 5.
 
-## Prochaine phase : 4 — Patch bay
-Routeur par échantillon, normalisations cassables, feedback avec délai d'un échantillon.
-Question ouverte : jacks exposés à la DAW (sorties CV, entrées sidechain), à trancher avant de commencer.
+## Phase en cours : 4 — Patch bay (branche `phase-4-patchbay`, PR #5)
+Démarrée à la demande de Gaby (2026-11-15), retours d'écoute des phases 2 et 3 encore attendus.
+Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phase 6), rien en phase 4.
+
+### Plan
+- `Source/Patch/PatchBay.h` : 20 entrées, 12 sorties, un câble par entrée, normalisations cassées par le câble,
+  détecteur de gate à hystérésis (+1 V / +0,5 V).
+- `Source/Engine.{h,cpp}` (pur) : reprend l'orchestration du processor (séquenceur, enveloppes, voix) et lit ses
+  entrées dans la patch bay. Contrôle à la fréquence de base, audio suréchantillonné ; une sortie pas encore
+  calculée est lue avec un échantillon de retard (feedback).
+- `Voice` lit ses entrées dans la patch bay (1V/OCT, SYNC, FOLD, CUTOFF, VCA CV, BLEND, VCW IN, VCF IN, U MIX).
+- Tests d'abord : `Tests/PatchTests.cpp` (routage, normalisations, M VCO → BIT FLIP à l'audio-rate, CLOCK 2
+  indépendant, RESET, TRIGGER / EG2 TRIG, feedback stable). Les golden de la phase 3 ne doivent pas bouger.
+- Paramètre `umix1_lvl`. Rendus `patch_*`, checklist, PR.
+
+### Fait
+- `PatchBay` (20 entrées, 12 sorties), `GateDetector`, `Engine` ; `Voice` lit ses 12 entrées dans la patch bay.
+- 10 tests de patch : câbles et normalisations, hystérésis, M VCO → BIT FLIP 1 à l'audio-rate (environ 500 flips
+  par seconde, sans crash), CLOCK 2 indépendant (4 contre 3 pas par seconde), CLOCK 1 qui entraîne CLOCK 2, RESET,
+  TRIGGER et EG2 TRIG, neuf câbles de feedback simultanés (sortie finie et bornée), chaque entrée de la voix.
+- Les 14 golden de la phase 3 passent sans changement après le déplacement de l'orchestration dans `Engine`.
+- Paramètre `umix1_lvl`. 6 rendus `patch_*`, ajoutés aux golden (20 scénarios).
+- 50 tests verts sur les 4 presets et sous ASan/UBSan ; pluginval niveau 10 (VST3, AU) et `auval` : OK.
+- Coût inchangé : environ 58 fois le temps réel en release.
+
+### En attente
+- **Réponses de Gaby aux checkpoints des phases 2, 3 et 4** (`LISTENING_CHECKLIST.md`).
+
+### Hypothèses à valider (ADR-016)
+- EG2 TRIG patché isole EG2 ; échelle des CV externes (±5 V = toute la course) ; U MIX saturé à ±10 V.
+
+### Reporté
+- Câbles dans le state, câblage depuis l'UI pendant la lecture : phases 5 et 6. Jacks exposés à la DAW : phase 6.
+
+## Prochaine phase : 5 — UI
+Panneau complet, câbles, LEDs, combos de boutons + bouton SHIFT, redimensionnement, deux thèmes.

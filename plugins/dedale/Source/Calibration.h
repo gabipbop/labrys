@@ -81,4 +81,10 @@ inline constexpr float kOutputHeadroom = 0.7f;     // gain avant la sortie : le 
 inline constexpr float kOutputClipKneeVolts = 3.5f; // l'écrêtage de sécurité commence ici, plafond à 5 V
 inline constexpr int kOversamplingStages = 2;       // ×4 (réglable en phase 6)
 inline constexpr float kParamSmoothingSeconds = 0.02f;
+
+// --- Patch bay (§9) ---
+inline constexpr float kTriggerPulseSeconds = 0.001f; // largeur des impulsions SEQ TRIG et CLOCK (0 → +5 V)
+inline constexpr float kRailVolts = 10.0f;            // U MIX sature aux rails, comme le circuit
+// Hypothèse : un câble dans EG2 TRIG isole EG2, qui ne suit plus ni TRIGGER ni les triggers des séquenceurs.
+inline constexpr bool kEg2TrigJackIsolatesEg2 = true;
 } // namespace dedale::calibration

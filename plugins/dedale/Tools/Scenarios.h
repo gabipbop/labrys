@@ -188,6 +188,61 @@ inline std::vector<Scenario> scenarios()
          {
              set(p, "order", static_cast<float>(std::min(2, static_cast<int>(time / 4.0)))); // 4 s par mode
          }},
+        // --- Patch bay (phase 4) ---
+        {"patch_bitflip_lfo", 20.0, 0.0,
+         [](DedaleProcessor& p)
+         {
+             internalClock(p);
+             set(p, "mvco_freq", 0.7f); // M VCO en LFO lent : le rythme de SEQ1 se réécrit en continu
+             p.patchBay().connect(dedale::Out::mvco, dedale::In::bitFlip1);
+         }},
+        {"patch_clock2_polymeter", 20.0, 0.0,
+         [](DedaleProcessor& p)
+         {
+             internalClock(p);
+             set(p, "mvco_freq", 3.0f); // SEQ2 à 3 pas par seconde contre 4 pour SEQ1
+             set(p, "eg_trig_mix", 0.5f);
+             set(p, "vcf_seq2_amt", 0.5f); // SEQ2 s'entend aussi sur le filtre
+             p.patchBay().connect(dedale::Out::mvco, dedale::In::clock2);
+         }},
+        {"patch_fm_1voct", 12.0, 0.0,
+         [](DedaleProcessor& p)
+         {
+             fixedPitch(p, 0.0f);
+             set(p, "vcw_fold", 0.0f);
+             set(p, "mvco_freq", 165.0f);
+             // U MIX sert d'atténuateur : M VCO → U MIX 1 (LVL) → VCO 1V/OCT, FM exponentielle de plus en
+             // plus profonde.
+             p.patchBay().connect(dedale::Out::mvco, dedale::In::umix1);
+             p.patchBay().connect(dedale::Out::umix, dedale::In::vcoPitch);
+         },
+         sweep("umix1_lvl", 0.0f, 0.3f, 12.0)},
+        {"patch_noise_cutoff", 12.0, 0.0,
+         [](DedaleProcessor& p)
+         {
+             fixedPitch(p, 1.0f);
+             set(p, "vcf_cutoff", 500.0f);
+             p.patchBay().connect(dedale::Out::noise, dedale::In::cutoff); // remplace EG1 sur le cutoff
+         },
+         sweep("vcf_eg1_amt", 0.0f, 0.5f, 12.0)},
+        {"patch_eg1_vcw_vca", 12.0, 0.0,
+         [](DedaleProcessor& p)
+         {
+             internalClock(p);
+             set(p, "eg1_decay", 0.06f); // chemin VCW : claquement court (EG1)
+             set(p, "eg2_decay", 1.5f);  // chemin VCF : longue queue (EG2)
+             set(p, "vcw_fold", 0.7f);
+             p.patchBay().connect(dedale::Out::eg1, dedale::In::vcwVcaCv);
+         }},
+        {"patch_feedback", 12.0, 0.0,
+         [](DedaleProcessor& p)
+         {
+             internalClock(p);
+             set(p, "vcf_res", 0.7f);
+             set(p, "vcf_cutoff", 1200.0f);
+             p.patchBay().connect(dedale::Out::vca, dedale::In::vcfIn); // la sortie revient dans le filtre
+         }},
+
         // Mesure d'aliasing : note tenue à 2,5 kHz, FOLD à fond, chemin VCW seul.
         {"alias_fold_high",
          3.0,

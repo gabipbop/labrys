@@ -1,8 +1,9 @@
 # DÉDALE : plugin (VST3, AU, Standalone) + tests.
 # Noms et codes : libs/ariane/cmake/SuiteIdentity.cmake
 
-# Cœur pur (aucun JUCE) : séquenceur, quantizer, horloges, DSP de la voix. Partagé par le plugin, les tests et les outils.
+# Cœur pur (aucun JUCE) : séquenceur, quantizer, horloges, DSP de la voix, patch bay, moteur. Partagé par le plugin, les tests et les outils.
 add_library(dedale_core STATIC
+    Source/Engine.cpp
     Source/DSP/Voice.cpp
     Source/Sequencer/Clock.cpp
     Source/Sequencer/GenerativeSequencer.cpp
@@ -69,6 +70,7 @@ if(LABRYS_BUILD_TESTS)
     add_executable(DedaleTests
         Tests/ClockTests.cpp
         Tests/DspTests.cpp
+        Tests/PatchTests.cpp
         Tests/QuantizerTests.cpp
         Tests/SequencerTests.cpp)
     target_link_libraries(DedaleTests PRIVATE dedale_core ariane_warnings Catch2::Catch2WithMain)

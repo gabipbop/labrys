@@ -53,7 +53,7 @@ Versions figées : JUCE 8.0.15, Catch2 v3.8.1, pluginval v1.0.4.
 - `juce::ScopedNoDenormals` dans `processBlock`.
 - Oversampling : sources + VCW + VCF dans un seul bloc suréchantillonné ; séquenceur et enveloppes à la fréquence de base.
 - IDs de paramètres APVTS en `snake_case`, **jamais renommés** après la v1.
-- Logique pure (séquenceur, quantizer, horloges) dans la bibliothèque `dedale_core`, sans aucun include JUCE.
+- Logique pure (séquenceur, DSP, patch bay, `Engine`) dans la bibliothèque `dedale_core`, sans aucun include JUCE.
 - Constantes à calibrer à l'oreille : toutes dans `Calibration.h`, documentées dans `docs/CALIBRATION.md`.
 - Zéro warning. Style : `.clang-format` (Allman, 4 espaces, 110 colonnes).
 

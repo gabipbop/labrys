@@ -37,9 +37,10 @@ void Voice::reset() noexcept
     folder.reset();
     filter.reset();
     outputDcBlocker.reset();
+    syncGate.reset();
 }
 
-void Voice::setControls(const VoiceParams& p, const VoiceCv& cv) noexcept
+void Voice::setControls(const VoiceParams& p, const VoiceCv& cv, const PatchBay& bay) noexcept
 {
     const auto egPitch = cv.eg1 * cal::kEgPitchOctavesPerVolt;
     vcoHz =
@@ -53,51 +54,104 @@ void Voice::setControls(const VoiceParams& p, const VoiceCv& cv) noexcept
     mixer.setLevels(p.mixVco, p.mixRing, p.mixMvco, p.mixNoise);
     noise.setTone(p.noiseTone);
 
-    // FOLD : knob + EG1 (via EG1/CV AMT) + SEQ1, chacun ramené à la course du knob.
-    fold = std::clamp(p.fold + p.vcwEg1Amt * cv.eg1 / cal::kEgMaxVolts + p.vcwSeq1Amt * cv.seq1 / 5.0f, 0.0f,
-                      1.0f);
+    // FOLD : knob + SEQ1, puis EG1 (ou la CV patchée) via EG1/CV AMT, chacun ramené à la course du knob.
+    foldBase = p.fold + p.vcwSeq1Amt * cv.seq1 / 5.0f;
+    foldAmount = p.vcwEg1Amt;
+    fold = std::clamp(foldBase + foldAmount * cv.eg1 / cal::kEgMaxVolts, 0.0f, 1.0f);
     bias = p.bias;
 
-    const auto cutoffVolts = p.vcfEg1Amt * cv.eg1 + p.vcfSeq2Amt * cv.seq2;
-    filter.setCutoff(p.cutoff *
-                         std::exp2(std::clamp(cutoffVolts * cal::kCutoffOctavesPerVolt, -10.0f, 10.0f)),
-                     p.resonance);
+    // CUTOFF : knob + SEQ2, puis EG1 (ou la CV patchée) via EG1/CV AMT, en 1 V/octave.
+    cutoffBaseHz =
+        p.cutoff * std::exp2(std::clamp(p.vcfSeq2Amt * cv.seq2 * cal::kCutoffOctavesPerVolt, -10.0f, 10.0f));
+    cutoffAmount = p.vcfEg1Amt;
+    resonance = p.resonance;
+    if (!bay.isPatched(In::cutoff))
+        filter.setCutoff(
+            cutoffBaseHz *
+                std::exp2(std::clamp(cutoffAmount * cv.eg1 * cal::kCutoffOctavesPerVolt, -10.0f, 10.0f)),
+            resonance);
     filterMode = p.filterMode;
     order = p.order;
 
     // Les deux VCA suivent EG2, puis BLEND équipuissance et VOLUME.
-    const auto vca = vcaGain(cv.eg2) * p.volume * cal::kOutputHeadroom;
-    gainVcw = vca * std::cos(0.5f * kPi * p.blend);
-    gainVcf = vca * std::sin(0.5f * kPi * p.blend);
+    blend = p.blend;
+    eg2 = cv.eg2;
+    outputGain = p.volume * cal::kOutputHeadroom;
+    umix1Level = p.umix1Level;
+    setPathGains(blend, eg2, eg2);
 }
 
-float Voice::processSample() noexcept
+void Voice::setPathGains(float blendPosition, float vcwVcaVolts, float vcfVcaVolts) noexcept
 {
-    const auto modulator = modVco.processSample(modVcoHz, false);
-    const auto carrier = vco.processSample(vcoHz, modulator / 5.0f, fmIndex);
-    const auto mix =
-        mixer.processSample(carrier, carrier * modulator / 5.0f, modulator, noise.processSample());
+    const auto angle = 0.5f * kPi * std::clamp(blendPosition, 0.0f, 1.0f);
+    gainVcw = vcaGain(vcwVcaVolts) * std::cos(angle) * outputGain;
+    gainVcf = vcaGain(vcfVcaVolts) * std::sin(angle) * outputGain;
+}
+
+float Voice::processSample(PatchBay& bay) noexcept
+{
+    // --- Sources ---
+    auto modulatorHz = modVcoHz;
+    if (bay.isPatched(In::mvcoPitch))
+        modulatorHz =
+            std::clamp(modulatorHz * std::exp2(std::clamp(bay.read(In::mvcoPitch, 0.0f), -10.0f, 10.0f)),
+                       0.01f, 20000.0f);
+    syncGate.process(bay.read(In::mvcoSync, 0.0f));
+    const auto modulator = modVco.processSample(modulatorHz, syncGate.isHigh());
+    bay.write(Out::mvco, modulator);
+
+    auto carrierHz = vcoHz;
+    if (bay.isPatched(In::vcoPitch))
+        carrierHz = std::clamp(carrierHz * std::exp2(std::clamp(bay.read(In::vcoPitch, 0.0f), -10.0f, 10.0f)),
+                               1.0f, 20000.0f);
+    const auto carrier = vco.processSample(carrierHz, modulator / 5.0f, fmIndex);
+    const auto ring = carrier * modulator / 5.0f;
+
+    const auto hiss = noise.processSample();
+    bay.write(Out::noise, hiss);
+    const auto mix = mixer.processSample(carrier, ring, modulator, hiss);
+    bay.write(Out::mixer, mix);
+
+    // U MIX : mixeur utilitaire DC-coupled, borné aux rails comme le serait le circuit.
+    const auto utility = bay.read(In::umix1, ring) * umix1Level + bay.read(In::umix2, 0.0f);
+    bay.write(Out::umix, std::clamp(utility, -cal::kRailVolts, cal::kRailVolts));
+
+    // --- VCW et VCF ---
+    auto foldNow = fold;
+    if (bay.isPatched(In::vcwFold))
+        foldNow = std::clamp(foldBase + foldAmount * bay.read(In::vcwFold, 0.0f) / 5.0f, 0.0f, 1.0f);
+    if (bay.isPatched(In::cutoff))
+        filter.setCutoff(cutoffBaseHz * std::exp2(std::clamp(cutoffAmount * bay.read(In::cutoff, 0.0f) *
+                                                                 cal::kCutoffOctavesPerVolt,
+                                                             -10.0f, 10.0f)),
+                         resonance);
 
     auto folded = 0.0f;
     auto filtered = 0.0f;
     switch (order)
     {
     case Order::parallel:
-        folded = folder.processSample(mix, fold, bias);
-        filtered = filter.processSample(mix, filterMode);
+        folded = folder.processSample(bay.read(In::vcwIn, mix), foldNow, bias);
+        filtered = filter.processSample(bay.read(In::vcfIn, mix), filterMode);
         break;
     case Order::vcwToVcf:
-        folded = folder.processSample(mix, fold, bias);
-        filtered = filter.processSample(folded, filterMode);
+        folded = folder.processSample(bay.read(In::vcwIn, mix), foldNow, bias);
+        filtered = filter.processSample(bay.read(In::vcfIn, folded), filterMode);
         break;
     case Order::vcfToVcw:
-        filtered = filter.processSample(mix, filterMode);
-        folded = folder.processSample(filtered, fold, bias);
+        filtered = filter.processSample(bay.read(In::vcfIn, mix), filterMode);
+        folded = folder.processSample(bay.read(In::vcwIn, filtered), foldNow, bias);
         break;
     }
 
+    // --- VCA, BLEND, sortie ---
+    if (bay.isPatched(In::blend) || bay.isPatched(In::vcwVcaCv) || bay.isPatched(In::vcfVcaCv))
+        setPathGains(blend + bay.read(In::blend, 0.0f) / 5.0f, bay.read(In::vcwVcaCv, eg2),
+                     bay.read(In::vcfVcaCv, eg2));
+
     // DC-block avant l'écrêtage de sécurité : la sortie reste bornée à ±1 (ADR-015).
-    const auto volts = outputDcBlocker.processSample(folded * gainVcw + filtered * gainVcf);
-    return safetyClip(volts) * 0.2f;
+    const auto volts = safetyClip(outputDcBlocker.processSample(folded * gainVcw + filtered * gainVcf));
+    bay.write(Out::vca, volts);
+    return volts * 0.2f;
 }
 } // namespace dedale

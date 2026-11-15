@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Calibration.h"
+#include "../Patch/PatchBay.h"
 #include "ModVco.h"
 #include "Noise.h"
 #include "SaturatingMixer.h"
@@ -47,6 +48,7 @@ struct VoiceParams
     Order order = Order::parallel;
     float blend = 0.5f; // 0 = VCW, 1 = VCF
     float volume = 0.7f;
+    float umix1Level = 0.0f;
 };
 
 // Tensions de modulation, en volts.
@@ -71,18 +73,23 @@ inline float vcaGain(float controlVolts) noexcept
     return std::pow(x, calibration::kVcaExponent);
 }
 
-// Voix de DÉDALE (§2) avec ses normalisations par défaut câblées en dur :
-// SEQ1 → VCO et FOLD, SEQ2 → MOD VCO et CUTOFF, EG1 → hauteurs, FOLD et CUTOFF, EG2 → les deux VCA.
-// setControls() est appelé à la fréquence de base, processSample() à la fréquence suréchantillonnée.
+// Voix de DÉDALE (§2). Ses entrées passent par la patch bay : sans câble, chacune voit sa normalisation
+// (EG1 → FOLD et CUTOFF, EG2 → les deux VCA, mixeur → VCW IN et VCF IN selon ORDER, ring mod → U MIX 1).
+// Les routes à atténuateur du panneau restent internes : SEQ1 → VCO et FOLD, SEQ2 → MOD VCO et CUTOFF,
+// EG1 → hauteurs. setControls() est appelé à la fréquence de base, processSample() à la fréquence
+// suréchantillonnée ; une entrée patchée est relue à chaque échantillon (modulation à l'audio-rate).
 class Voice
 {
 public:
     void prepare(double oversampledRate, int maxBlock) noexcept;
     void reset() noexcept;
-    void setControls(const VoiceParams& params, const VoiceCv& cv) noexcept;
-    float processSample() noexcept; // sortie ±1.0
+    void setControls(const VoiceParams& params, const VoiceCv& cv, const PatchBay& bay) noexcept;
+    float
+    processSample(PatchBay& bay) noexcept; // sortie ±1.0 ; écrit les jacks M VCO, NOISE, MIXER, U MIX, VCA
 
 private:
+    void setPathGains(float blend, float vcwVcaVolts, float vcfVcaVolts) noexcept;
+
     Vco vco;
     ModVco modVco;
     Noise noise;
@@ -90,7 +97,9 @@ private:
     Wavefolder folder;
     VcFilter filter;
     DcBlocker outputDcBlocker;
+    GateDetector syncGate;
 
+    // Valeurs sans câble, calculées à la fréquence de base.
     float vcoHz = 110.0f;
     float modVcoHz = 55.0f;
     float fmIndex = 0.0f;
@@ -100,5 +109,16 @@ private:
     float gainVcw = 0.0f;
     float gainVcf = 0.0f;
     Order order = Order::parallel;
+
+    // De quoi recalculer une entrée patchée à chaque échantillon.
+    float foldBase = 0.0f;       // knob + SEQ1
+    float foldAmount = 0.0f;     // EG1/CV AMT du VCW
+    float cutoffBaseHz = 800.0f; // knob + SEQ2
+    float cutoffAmount = 0.0f;   // EG1/CV AMT du VCF
+    float resonance = 0.0f;
+    float blend = 0.5f;
+    float eg2 = 0.0f;
+    float outputGain = 0.0f; // VOLUME × marge de sortie
+    float umix1Level = 0.0f;
 };
 } // namespace dedale
