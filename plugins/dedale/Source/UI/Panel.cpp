@@ -32,71 +32,112 @@ void Panel::Background::paint(juce::Graphics& g)
                                            bounds.getHeight(), false));
     g.fillRect(bounds);
 
-    // Flancs en cuivre anodisé
+    const auto bolt = [&g](juce::Point<float> centre, float radius)
+    {
+        const auto head = juce::Rectangle<float>(2.0f * radius, 2.0f * radius).withCentre(centre);
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xffe2e2df), head.getTopLeft(),
+                                               juce::Colour(0xff4c4d50), head.getBottomRight(), false));
+        g.fillEllipse(head);
+        g.setColour(juce::Colours::black.withAlpha(0.75f));
+        g.drawEllipse(head, 0.5f);
+        g.drawLine({centre.translated(-radius * 0.6f, -radius * 0.35f),
+                    centre.translated(radius * 0.6f, radius * 0.35f)},
+                   0.8f);
+    };
+
+    // Flancs
     for (const auto x : {0.0f, bounds.getWidth() - 18.0f})
     {
-        juce::ColourGradient rail(colour::railDark, x, 0.0f, colour::railDark.brighter(0.1f), x + 18.0f, 0.0f,
-                                  false);
-        rail.addColour(0.45, colour::railLight);
-        g.setGradientFill(rail);
-        g.fillRect(x, 0.0f, 18.0f, bounds.getHeight());
+        const juce::Rectangle<float> rail(x, 0.0f, 18.0f, bounds.getHeight());
+        if (skin().hazard)
+        {
+            g.setColour(skin().railDark);
+            g.fillRect(rail);
+            g.saveState();
+            g.reduceClipRegion(rail.toNearestInt());
+            g.setColour(skin().railLight);
+            for (float y = -20.0f; y < bounds.getHeight() + 20.0f; y += 22.0f) // bandes de signalisation
+            {
+                juce::Path stripe;
+                stripe.addQuadrilateral(x, y + 18.0f, x + 18.0f, y, x + 18.0f, y + 11.0f, x, y + 29.0f);
+                g.fillPath(stripe);
+            }
+            g.restoreState();
+        }
+        else
+        {
+            juce::ColourGradient metal(skin().railDark, x, 0.0f, skin().railDark.brighter(0.1f), x + 18.0f,
+                                       0.0f, false);
+            metal.addColour(0.45, skin().railLight);
+            g.setGradientFill(metal);
+            g.fillRect(rail);
+        }
         g.setColour(juce::Colours::black.withAlpha(0.55f));
         g.fillRect(x == 0.0f ? 17.0f : x, 0.0f, 1.0f, bounds.getHeight());
+        if (skin().bolts)
+            for (const auto y : {12.0f, bounds.getHeight() - 12.0f})
+                bolt({x + 9.0f, y}, 4.2f);
     }
 
-    g.setColour(colour::ink);
-    g.setFont(font(24.0f, true, 0.24f));
+    g.setColour(skin().ink);
+    g.setFont(titleFont(24.0f));
     g.drawText(juce::String::fromUTF8(LABRYS_DISPLAY_NAME),
-               juce::Rectangle<float>(34.0f, 8.0f, 200.0f, 26.0f), juce::Justification::centredLeft);
-    drawLabel(g, juce::String::fromUTF8("SYNTHÉTISEUR GÉNÉRATIF"), 136.0f, 28.0f, 8.4f, colour::sub, false,
+               juce::Rectangle<float>(34.0f, 8.0f, 220.0f, 26.0f), juce::Justification::centredLeft);
+    drawLabel(g, juce::String::fromUTF8("SYNTHÉTISEUR GÉNÉRATIF"), 172.0f, 28.0f, 8.4f, skin().sub, false,
               juce::Justification::centredLeft);
-    drawLabel(g, "LABRYS", 926.0f, 28.0f, 9.4f, colour::sub, true, juce::Justification::centredRight);
-    drawLabel(g, "RAW POWA STUDIO", 926.0f, 439.0f, 6.4f, colour::sub, false,
+    drawLabel(g, "LABRYS", 926.0f, 28.0f, 9.4f, skin().sub, true, juce::Justification::centredRight);
+    drawLabel(g, "RAW POWA STUDIO", 926.0f, 439.0f, 6.4f, skin().sub, false,
               juce::Justification::centredRight);
 
     // Modules : cadre fin, nom dans un cartouche plein
     for (const auto& m : layout::kModules)
     {
-        g.setColour(colour::ink);
-        g.drawRoundedRectangle(m.x, m.y, m.w, m.h, 7.0f, 1.1f);
+        const juce::Rectangle<float> frame(m.x, m.y, m.w, m.h);
+        g.setColour(skin().ink);
+        g.strokePath(framePath(frame, 7.0f), juce::PathStrokeType(skin().chamfer ? 1.3f : 1.1f));
         const auto name = juce::String::fromUTF8(m.name);
         const auto width = juce::GlyphArrangement::getStringWidth(font(8.8f, true, 0.14f), name) + 16.0f;
         const juce::Rectangle<float> tab(m.x + 12.0f, m.y - 7.5f, width, 15.0f);
-        g.fillRoundedRectangle(tab, 3.0f);
+        g.fillPath(framePath(tab, 3.0f));
         g.setColour(colour::tabInk);
         g.setFont(font(8.8f, true, 0.14f));
         g.drawText(name, tab, juce::Justification::centred, false);
+        if (skin().bolts)
+            for (const auto corner :
+                 {frame.getTopRight().translated(-9.0f, 9.0f), frame.getBottomLeft().translated(9.0f, -9.0f),
+                  frame.getBottomRight().translated(-9.0f, -9.0f)})
+                bolt(corner, 2.6f);
     }
 
     for (const auto& knob : layout::kKnobs)
         drawLabel(g, knob.label, knob.x, labelY(knob), knob.radius >= 9.0f ? 7.6f : 7.0f,
-                  knob.radius >= 9.0f ? colour::ink : colour::sub);
+                  knob.radius >= 9.0f ? skin().ink : skin().sub);
 
     // Séquenceur
     for (std::size_t lane = 0; lane < 2; ++lane)
     {
         const auto y = layout::kSeqRowY[lane];
-        drawLabel(g, "SEQ " + juce::String(lane + 1), 40.0f, y + 2.5f, 8.6f, colour::ink, true,
+        drawLabel(g, "SEQ " + juce::String(lane + 1), 40.0f, y + 2.5f, 8.6f, skin().ink, true,
                   juce::Justification::centredLeft);
         for (int step = 0; step < 8; ++step)
             drawLabel(g, juce::String(step + 1),
                       layout::kLedX0 + static_cast<float>(step) * layout::kLedSpacing, y - 12.0f, 6.4f,
-                      colour::sub);
+                      skin().sub);
     }
     const auto buttonLabel = [&g](const char* text, float x, float y)
-    { drawLabel(g, text, x, y - layout::kButtonSize / 2.0f - 5.0f, 7.0f, colour::ink); };
+    { drawLabel(g, text, x, y - layout::kButtonSize / 2.0f - 5.0f, 7.0f, skin().ink); };
     for (const auto& button : layout::kComboButtons)
         buttonLabel(button.label, button.x, button.y);
     buttonLabel("RUN / STOP", kRunX, layout::kTransportY);
     buttonLabel("CHAIN", kChainX, layout::kTransportY);
     buttonLabel("SHIFT", kShiftX, layout::kTransportY);
     buttonLabel("HOST SYNC", kSyncX, layout::kTransportY);
-    drawLabel(g, "QUANTIZER", static_cast<float>(kDisplayArea.getCentreX()), 131.0f, 7.0f, colour::ink);
+    drawLabel(g, "QUANTIZER", static_cast<float>(kDisplayArea.getCentreX()), 131.0f, 7.0f, skin().ink);
 
     // Routage
-    drawLabel(g, "ORDER", 550.0f, 262.0f, 7.6f, colour::ink);
-    drawLabel(g, "VCW", 524.0f, 408.0f, 7.0f, colour::sub);
-    drawLabel(g, "VCF", 576.0f, 408.0f, 7.0f, colour::sub);
+    drawLabel(g, "ORDER", 550.0f, 262.0f, 7.6f, skin().ink);
+    drawLabel(g, "VCW", 524.0f, 408.0f, 7.0f, skin().sub);
+    drawLabel(g, "VCF", 576.0f, 408.0f, 7.0f, skin().sub);
 
     // Patch bay : pointillé entre les entrées et les sorties
     juce::Path separator;
@@ -104,7 +145,7 @@ void Panel::Background::paint(juce::Graphics& g)
     juce::Path dashed;
     const std::array<float, 2> dashes{2.0f, 3.0f};
     juce::PathStrokeType(0.6f).createDashedStroke(dashed, separator, dashes.data(), 2);
-    g.setColour(colour::ink.withAlpha(0.5f));
+    g.setColour(skin().ink.withAlpha(0.5f));
     g.fillPath(dashed);
 }
 

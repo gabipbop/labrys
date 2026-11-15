@@ -121,7 +121,11 @@ Pas de logo, nom, police ni bois Moog (règle du projet).
 - **Typo** : il n'aime pas du tout Barlow Condensed. À remplacer.
 - **LEDs** : « affreuses ». À redessiner.
 - Direction générale : plus **agressif / industriel**. Le rendu actuel fait « trop gentil et trop IA ».
-- À faire une fois le panneau fonctionnel : proposer des variantes sur de vraies captures du plugin.
+- Proposé le même jour : trois habillages rendus par le plugin (`docs/checkpoints/phase-5/panneau_1..3.png`,
+  `panneau_0.png` = première version), choisis par `ui::setSkin` : **1 Acier** (Saira Condensed + pochoir,
+  fentes lumineuses, rouge signal, pans coupés, vis), **2 Terminal** (Share Tech Mono, voyants carrés, blanc et
+  rouge), **3 Chantier** (Chakra Petch, pastilles à pans coupés, jaune, flancs à bandes). **En attente du choix
+  de Gaby** ; les habillages non retenus et leurs polices seront retirés.
 
 ### Plan
 - `Sequencer/ButtonComboHandler` (pur, tests d'abord) : combinaisons du §8.4, appui long de BUFFER, bouton SHIFT
@@ -136,7 +140,7 @@ Pas de logo, nom, police ni bois Moog (règle du projet).
 - `ButtonComboHandler` et ses tests (combinaisons du §8.4, appui long de BUFFER).
 - Pont interface ↔ audio dans le processor (FIFO d'actions, table de câbles, état d'affichage, oscilloscope).
 - Panneau complet (`Source/UI`) : 32 knobs, boutons, LEDs, afficheur du quantizer, ORDER, oscilloscope, patch
-  bay avec câbles, infobulles, redimensionnement. Capture : `docs/checkpoints/phase-5/panneau.png`.
+  bay avec câbles, infobulles, redimensionnement. Captures : `docs/checkpoints/phase-5/`.
 - 54 tests verts sur les 4 presets et sous ASan ; pluginval niveau 10 **avec** ses tests d'éditeur et `auval` : OK.
 
 ### Reste à faire

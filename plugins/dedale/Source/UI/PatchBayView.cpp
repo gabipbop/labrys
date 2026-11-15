@@ -68,11 +68,11 @@ void PatchBayView::paint(juce::Graphics& g)
         if (jack.isOutput)
         {
             const auto width = juce::GlyphArrangement::getStringWidth(font(6.2f, true), name) + 7.0f;
-            g.setColour(colour::ink);
+            g.setColour(skin().ink);
             g.fillRoundedRectangle(
                 juce::Rectangle<float>(width, 9.0f).withCentre({centre.x, centre.y - 16.0f}), 1.6f);
         }
-        drawLabel(g, name, centre.x, centre.y - 13.2f, 6.2f, jack.isOutput ? colour::tabInk : colour::ink,
+        drawLabel(g, name, centre.x, centre.y - 13.2f, 6.2f, jack.isOutput ? colour::tabInk : skin().ink,
                   jack.isOutput);
 
         g.setColour(juce::Colours::black.withAlpha(0.4f));
@@ -90,7 +90,7 @@ void PatchBayView::paint(juce::Graphics& g)
         g.fillEllipse(juce::Rectangle<float>(7.2f, 7.2f).withCentre(centre));
         if (jack == hovered && !unusable)
         {
-            g.setColour(colour::lit);
+            g.setColour(skin().lit);
             g.drawEllipse(nut.expanded(2.0f), 1.2f);
         }
     };
@@ -237,6 +237,6 @@ void CableOverlay::paint(juce::Graphics& g)
     }
     if (view.dragFrom.isValid())
         drawCable(jackCentre(view.dragFrom), view.dragPosition,
-                  view.dragFrom.isOutput ? cableColour(view.dragFrom.index) : colour::sub, true, false);
+                  view.dragFrom.isOutput ? cableColour(view.dragFrom.index) : skin().sub, true, false);
 }
 } // namespace dedale::ui
