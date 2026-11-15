@@ -3,6 +3,8 @@
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <limits>
 #include <vector>
 
 using Catch::Approx;
@@ -583,5 +585,89 @@ TEST_CASE("Séquenceur : sauvegarde et rappel du buffer", "[seq]")
         }
         REQUIRE(seq.quantizerMode() == 2);
         REQUIRE_FALSE(run(seq, 0, 8)[0].trigger);
+    }
+}
+
+TEST_CASE("Séquenceur : état complet sauvegardé et restauré", "[seq][state]")
+{
+    auto seq = makeSequencer();
+    loadPattern(seq);
+    seq.pressLength(1);
+    seq.shiftWriteHead(0);
+    seq.bitShift(0);
+    seq.setQuantizerMode(7);
+    seq.setRootSemitones(5);
+    seq.setUnipolar(true);
+    seq.setChain(true);
+    seq.saveBuffer();
+    seq.setChain(false);
+    run(seq, 0, 5);
+    run(seq, 1, 3);
+
+    const auto saved = seq.state();
+
+    SECTION("un autre séquenceur restauré est dans le même état et joue la même suite")
+    {
+        GenerativeSequencer other(999);
+        other.setRunning(true);
+        other.setState(saved);
+        REQUIRE(other.state() == saved);
+        REQUIRE(other.hasBuffer());
+        REQUIRE(run(other, 0, 40) == run(seq, 0, 40));
+        REQUIRE(run(other, 1, 40) == run(seq, 1, 40));
+
+        // Le buffer restauré se rappelle comme l'original.
+        other.recallBuffer();
+        seq.recallBuffer();
+        REQUIRE(other.state() == seq.state());
+        REQUIRE(other.isChained());
+    }
+
+    SECTION("restaurer après avoir tout abîmé retrouve l'état sauvegardé")
+    {
+        seq.setCorrupt(0, 1.0f);
+        seq.setCorrupt(1, 1.0f);
+        run(seq, 0, 300);
+        run(seq, 1, 300);
+        seq.clear();
+        seq.setState(saved);
+        REQUIRE(seq.state() == saved);
+    }
+
+    SECTION("un état corrompu est ramené dans les bornes, sans crash")
+    {
+        auto broken = saved;
+        broken.lanes[0].length = 99;
+        broken.lanes[1].length = -4;
+        broken.lanes[0].playHead = 5000;
+        broken.lanes[1].writeOffset = -3;
+        broken.lanes[0].voltage[2] = 1.0e9f;
+        broken.lanes[1].voltage[0] = std::numeric_limits<float>::quiet_NaN();
+        broken.heldVolts[0] = -1.0e9f;
+        broken.quantMode = -7;
+        broken.rotations[0] = 123456;
+        broken.buffer.length[0] = 0;
+        broken.buffer.quantMode = 400;
+        broken.chained = true;
+        seq.setState(broken);
+
+        const auto fixed = seq.state();
+        REQUIRE(fixed.lanes[0].length == 8);
+        REQUIRE(fixed.lanes[1].length == 1);
+        REQUIRE(fixed.lanes[0].playHead < seq.span(0));
+        REQUIRE(fixed.lanes[1].writeOffset == 0);
+        REQUIRE(fixed.lanes[0].voltage[2] == 5.0f);
+        REQUIRE(fixed.lanes[1].voltage[0] == 0.0f);
+        REQUIRE(fixed.heldVolts[0] == -5.0f);
+        REQUIRE(fixed.quantMode == 0);
+        REQUIRE(fixed.buffer.length[0] == 1);
+        REQUIRE(fixed.buffer.quantMode == 15);
+        for (const auto& out : run(seq, 0, 100))
+            REQUIRE(std::isfinite(out.cv));
+        seq.bitShift(0);
+        seq.undoBitShift(0);
+        seq.recallBuffer();
+        for (const auto& out : run(seq, 1, 100))
+            REQUIRE(std::isfinite(out.cv));
     }
 }

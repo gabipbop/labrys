@@ -144,6 +144,16 @@ bandes jaunes). Les autres habillages et leurs polices sont retirés.
   ne sont pas testées automatiquement. Questions dans `LISTENING_CHECKLIST.md`, section phase 5.
 - Retours d'écoute des phases 2, 3 et 4.
 
-## Prochaine phase : 6 — Finitions
-State complet (séquence, câbles, réglages globaux), presets, MIDI clock et MIDI out, jacks HOST, oversampling
-réglable, profiling CPU.
+## Phase en cours : 6 — Finitions (branche `phase-6-finitions`, empilée sur `phase-5-ui`)
+Démarrée à la demande de Gaby (2026-11-15), PR 6 ouverte et essai du panneau dans la DAW encore attendu.
+
+### Plan
+1. **Sauvegarde du projet** : état complet du séquenceur (`SequencerState`, tests d'abord), câbles, réglages
+   globaux, version du format. Lecture tolérante aux valeurs hors bornes.
+2. **Réglages globaux** (menu engrenage) : RESET qui rappelle le buffer, polarité des CV, suréchantillonnage
+   ×2/×4/×8, drift analogique, coloration du wavefolder.
+3. **Presets** : fichiers XML dans le dossier utilisateur, une dizaine de presets d'usine, barre de presets.
+4. **MIDI** : clock, Start/Stop/Continue, canal, sortie MIDI.
+5. **Mesure du CPU** : `DedaleBench` avec un budget.
+6. Petits restes : rappel du buffer et paramètres, clignotement du write head, module Wavefolder.
+Jacks exposés à la DAW (macros, sidechain) : option de la spec, à décider avec Gaby.
