@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine.h"
+#include "Presets.h"
 #include "Sequencer/ButtonComboHandler.h"
 #include "Sequencer/Clock.h"
 #include "StateIO.h"
@@ -87,6 +88,7 @@ public:
     int pullScope(float* destination, int maxSamples) noexcept;
 
     juce::AudioProcessorValueTreeState apvts;
+    PresetManager presets{*this};
 
     // Paramètres continus, lissés (~20 ms) avant d'atteindre le DSP. L'ordre suit le tableau kContinuous du
     // .cpp.

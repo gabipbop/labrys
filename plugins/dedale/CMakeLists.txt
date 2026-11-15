@@ -34,6 +34,7 @@ juce_add_plugin(Dedale
 set(DEDALE_PLUGIN_SOURCES
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/Presets.cpp
     Source/StateIO.cpp
     Source/UI/Panel.cpp
     Source/UI/PatchBayView.cpp

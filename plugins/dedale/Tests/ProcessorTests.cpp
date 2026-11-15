@@ -2,6 +2,7 @@
 
 #include "../Tools/Scenarios.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 namespace
@@ -221,4 +222,101 @@ TEST_CASE("Rappel du buffer : les paramètres chain et quantizer suivent", "[sta
     REQUIRE(processor.apvts.getRawParameterValue("chain")->load() == 1.0f);
     process(processor, 0.1);
     REQUIRE(processor.sequencerState().quantMode == 3);
+}
+
+TEST_CASE("Presets : usine et utilisateur", "[presets]")
+{
+    const auto directory =
+        juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getChildFile("dedale_presets_" + juce::String(juce::Random::getSystemRandom().nextInt(1000000)));
+    DedaleProcessor processor;
+    PresetManager presets(processor, directory);
+    processor.seedSequencer(5);
+    const auto sequence = processor.sequencerState();
+    const auto value = [&](const char* id) { return processor.apvts.getRawParameterValue(id)->load(); };
+
+    REQUIRE(presets.numFactoryPresets() >= 10);
+    REQUIRE(presets.currentName() == "Init");
+
+    SECTION("un preset d'usine pose ses réglages et ses câbles, sans toucher à la séquence ni au transport")
+    {
+        render::internalClock(processor); // run, tempo 240, synchro interne
+        render::set(processor, "vcw_bias", -0.8f);
+        processor.connectCable(dedale::Out::eg2, dedale::In::blend);
+
+        for (int i = 0; i < presets.numFactoryPresets(); ++i)
+            if (presets.factoryName(i) == juce::String::fromUTF8("Polymétrie CLOCK 2"))
+                presets.loadFactory(i);
+        REQUIRE(presets.currentName() == juce::String::fromUTF8("Polymétrie CLOCK 2"));
+        REQUIRE(value("mvco_freq") == Catch::Approx(3.0f));
+        REQUIRE(value("eg_trig_mix") == Catch::Approx(0.5f));
+        REQUIRE(value("vcw_bias") == Catch::Approx(0.0f)); // revenu à sa valeur par défaut
+        REQUIRE(processor.cableSource(dedale::In::clock2) == static_cast<int>(dedale::Out::mvco));
+        REQUIRE(processor.cableSource(dedale::In::blend) == -1); // l'ancien câble est retiré
+        REQUIRE(value("run") == 1.0f);
+        REQUIRE(value("tempo") == Catch::Approx(240.0f));
+        REQUIRE(value("sync_mode") == 0.0f);
+        REQUIRE(processor.sequencerState() == sequence);
+    }
+
+    SECTION("chaque preset d'usine se charge et joue sans valeur aberrante")
+    {
+        render::internalClock(processor);
+        for (int i = 0; i < presets.numFactoryPresets(); ++i)
+        {
+            presets.loadFactory(i);
+            const auto m = render::measure(process(processor, 2.0));
+            INFO(presets.factoryName(i));
+            REQUIRE(m.finite);
+            REQUIRE(m.peakDb <= 0.0);
+            REQUIRE(m.rmsDb > -55.0); // aucun preset muet
+        }
+    }
+
+    SECTION("enregistrer, relire, parcourir, supprimer un preset utilisateur")
+    {
+        REQUIRE(presets.userNames().isEmpty());
+        render::set(processor, "vcf_cutoff", 777.0f);
+        render::set(processor, "tempo", 300.0f);
+        processor.connectCable(dedale::Out::noise, dedale::In::vcwFold);
+        REQUIRE(presets.saveUser("Mon patch / test"));
+        REQUIRE(presets.userNames().size() == 1);
+        const auto name = presets.userNames()[0]; // nom rendu légal pour un fichier
+        REQUIRE(presets.currentName() == name);
+
+        presets.loadFactory(0);
+        render::set(processor, "tempo", 90.0f);
+        REQUIRE(value("vcf_cutoff") == Catch::Approx(800.0f));
+        REQUIRE(processor.cableSource(dedale::In::vcwFold) == -1);
+
+        REQUIRE(presets.loadUser(name));
+        REQUIRE(value("vcf_cutoff") == Catch::Approx(777.0f));
+        REQUIRE(processor.cableSource(dedale::In::vcwFold) == static_cast<int>(dedale::Out::noise));
+        REQUIRE(value("tempo") == Catch::Approx(90.0f)); // le tempo du moment est gardé
+        REQUIRE(processor.sequencerState() == sequence);
+
+        // Le parcours passe par les presets d'usine puis par ceux de l'utilisateur, et boucle.
+        presets.step(1);
+        REQUIRE(presets.currentName() == "Init");
+        presets.step(-1);
+        REQUIRE(presets.currentName() == name);
+
+        REQUIRE(presets.deleteUser(name));
+        REQUIRE(presets.userNames().isEmpty());
+        REQUIRE_FALSE(presets.loadUser(name));
+        REQUIRE_FALSE(presets.saveUser("   "));
+    }
+
+    SECTION("un fichier illisible est refusé sans rien changer")
+    {
+        directory.createDirectory();
+        directory.getChildFile("casse.xml").replaceWithText("<pas un preset");
+        directory.getChildFile("autre.xml").replaceWithText("<AUTRE_PLUGIN/>");
+        render::set(processor, "vcf_cutoff", 555.0f);
+        REQUIRE_FALSE(presets.loadUser("casse"));
+        REQUIRE_FALSE(presets.loadUser("autre"));
+        REQUIRE(value("vcf_cutoff") == Catch::Approx(555.0f));
+    }
+
+    directory.deleteRecursively();
 }
