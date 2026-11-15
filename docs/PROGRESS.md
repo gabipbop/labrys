@@ -111,7 +111,7 @@ Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phas
 ### Reporté
 - Câbles dans le state, câblage depuis l'UI pendant la lecture : phases 5 et 6. Jacks exposés à la DAW : phase 6.
 
-## Phase en cours : 5 — UI (branche `phase-5-ui`)
+## Phase 5 — UI : mergée (v0.5.0, PR #6), essai dans la DAW encore attendu
 Direction validée par Gaby (2026-11-15) après deux séries de maquettes : rendu « synthé matériel classique »
 (esprit Mariana), façade noire à modules encadrés, knobs à jupe noire et capuchon métal, flancs cuivre.
 **Un seul thème, le noir** (décision de Gaby : pas de thème clair, contrairement au §11.2 de la spec).
@@ -144,8 +144,8 @@ bandes jaunes). Les autres habillages et leurs polices sont retirés.
   ne sont pas testées automatiquement. Questions dans `LISTENING_CHECKLIST.md`, section phase 5.
 - Retours d'écoute des phases 2, 3 et 4.
 
-## Phase en cours : 6 — Finitions (branche `phase-6-finitions`, empilée sur `phase-5-ui`)
-Démarrée à la demande de Gaby (2026-11-15), PR 6 ouverte et essai du panneau dans la DAW encore attendu.
+## Phase en cours : 6 — Finitions (branche `phase-6-finitions`, PR #7)
+Démarrée à la demande de Gaby (2026-11-15), essai du panneau dans la DAW encore attendu.
 
 ### Plan
 1. **Sauvegarde du projet** : état complet du séquenceur (`SequencerState`, tests d'abord), câbles, réglages
@@ -174,7 +174,6 @@ Jacks exposés à la DAW (macros, sidechain) : option de la spec, à décider av
 - **Essai par Gaby dans la DAW** : sauvegarde et réouverture d'un projet, presets, MIDI clock depuis Ableton,
   enregistrement de la sortie MIDI. Questions dans `LISTENING_CHECKLIST.md`, section phase 6.
 - Décision de Gaby sur les jacks exposés à la DAW (macros automatisables, entrée sidechain).
-- Merge de la PR 6 (phase 5), puis recalage de `phase-6-finitions` sur `main`.
 
 ## Prochaine phase : 7 — Calibration
 Passe d'écoute guidée avec Gaby : courbe du wavefolder, résonance max, saturation du mixeur, decays, réponse des
