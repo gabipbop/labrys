@@ -31,6 +31,8 @@ public:
     GenerativeSequencer& sequencer() noexcept { return seq; }
     PatchBay& patchBay() noexcept { return bay; }
     // Bouton BIT FLIP du panneau : s'ajoute au jack BIT FLIP de la même lane.
+    // Réglage global : le jack RESET rappelle aussi le buffer.
+    void setResetRecallsBuffer(bool shouldRecall) noexcept { resetRecallsBuffer = shouldRecall; }
     void setBitFlipButton(int lane, bool down) noexcept { flipButtons[lane == 0 ? 0u : 1u] = down; }
 
     // masterClock : tick de l'horloge interne/hôte. manualTrigger : bouton TRIGGER ou Note On à l'arrêt.
@@ -56,6 +58,7 @@ private:
 
     std::array<int, kNumLanes> trigPulse{}; // échantillons restants des impulsions SEQ TRIG
     int clockPulse = 0;
+    bool resetRecallsBuffer = false;
     int pulseSamples = 48;
 };
 } // namespace dedale

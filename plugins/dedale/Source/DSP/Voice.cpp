@@ -26,6 +26,16 @@ void Voice::prepare(double oversampledRate, int maxBlock) noexcept
     folder.prepare(oversampledRate, maxBlock);
     filter.prepare(oversampledRate, maxBlock);
     outputDcBlocker.prepare(oversampledRate);
+    setControlRate(oversampledRate / 4.0);
+}
+
+void Voice::setControlRate(double controlRate) noexcept
+{
+    // Bruit blanc uniforme (écart-type 1/√3) lissé par un passe-bas du premier ordre : on en déduit l'échelle
+    // qui donne l'écart-type voulu, en cents.
+    driftCoefficient = 1.0f - std::exp(-2.0f * kPi * cal::kDriftHz / static_cast<float>(controlRate));
+    const auto smoothedDeviation = std::sqrt(driftCoefficient / (2.0f - driftCoefficient) / 3.0f);
+    driftScale = cal::kDriftCents / 1200.0f / smoothedDeviation;
 }
 
 void Voice::reset() noexcept
@@ -38,17 +48,24 @@ void Voice::reset() noexcept
     filter.reset();
     outputDcBlocker.reset();
     syncGate.reset();
+    driftRng.seed(0x44524946u);
+    drift = {};
 }
 
 void Voice::setControls(const VoiceParams& p, const VoiceCv& cv, const PatchBay& bay) noexcept
 {
     const auto egPitch = cv.eg1 * cal::kEgPitchOctavesPerVolt;
+    for (auto& d : drift)
+        d = p.analogDrift ? d + driftCoefficient * (driftRng.uniform() * 2.0f - 1.0f - d) : 0.0f;
+    zeroColour = p.vcwZeroColour;
     vcoHz =
-        std::clamp(p.vcoFreq * std::exp2(p.vcoEg1Amt * egPitch + sequencerAmountGain(p.vcoSeq1Amt) * cv.seq1),
+        std::clamp(p.vcoFreq * std::exp2(p.vcoEg1Amt * egPitch + sequencerAmountGain(p.vcoSeq1Amt) * cv.seq1 +
+                                         drift[0] * driftScale),
                    1.0f, 20000.0f);
-    modVcoHz = std::clamp(
-        p.mvcoFreq * std::exp2(p.mvcoEg1Amt * egPitch + sequencerAmountGain(p.mvcoSeq2Amt) * cv.seq2), 0.01f,
-        20000.0f);
+    modVcoHz = std::clamp(p.mvcoFreq *
+                              std::exp2(p.mvcoEg1Amt * egPitch +
+                                        sequencerAmountGain(p.mvcoSeq2Amt) * cv.seq2 + drift[1] * driftScale),
+                          0.01f, 20000.0f);
     fmIndex = p.fmAmt * cal::kTzfmMaxIndex;
 
     mixer.setLevels(p.mixVco, p.mixRing, p.mixMvco, p.mixNoise);
@@ -131,16 +148,16 @@ float Voice::processSample(PatchBay& bay) noexcept
     switch (order)
     {
     case Order::parallel:
-        folded = folder.processSample(bay.read(In::vcwIn, mix), foldNow, bias);
+        folded = folder.processSample(bay.read(In::vcwIn, mix), foldNow, bias, zeroColour);
         filtered = filter.processSample(bay.read(In::vcfIn, mix), filterMode);
         break;
     case Order::vcwToVcf:
-        folded = folder.processSample(bay.read(In::vcwIn, mix), foldNow, bias);
+        folded = folder.processSample(bay.read(In::vcwIn, mix), foldNow, bias, zeroColour);
         filtered = filter.processSample(bay.read(In::vcfIn, folded), filterMode);
         break;
     case Order::vcfToVcw:
         filtered = filter.processSample(bay.read(In::vcfIn, mix), filterMode);
-        folded = folder.processSample(bay.read(In::vcwIn, filtered), foldNow, bias);
+        folded = folder.processSample(bay.read(In::vcwIn, filtered), foldNow, bias, zeroColour);
         break;
     }
 

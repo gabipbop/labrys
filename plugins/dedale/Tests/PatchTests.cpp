@@ -1,5 +1,6 @@
 #include "Engine.h"
 #include "Patch/PatchBay.h"
+#include "Settings.h"
 #include "TestSignals.h"
 
 #include <catch2/catch_approx.hpp>
@@ -492,5 +493,103 @@ TEST_CASE("Voix : entrées de la patch bay", "[patch][voice]")
         REQUIRE(top[1] > 1.0f);
         REQUIRE(top[2] > 3.0f);
         REQUIRE(top[3] > 1.0f);
+    }
+}
+
+TEST_CASE("Réglages globaux : rangement et lecture tolérante", "[settings]")
+{
+    dedale::GlobalSettings s;
+    REQUIRE(dedale::unpack(dedale::pack(s)) == s); // valeurs par défaut
+
+    s.resetRecallsBuffer = s.unipolarCv = s.midiOut = true;
+    s.analogDrift = s.vcwZeroColour = false;
+    s.oversampling = 8;
+    s.midiChannel = 16;
+    REQUIRE(dedale::unpack(dedale::pack(s)) == s);
+
+    s.oversampling = 3; // valeur invalide : ramenée au cran le plus proche en dessous
+    s.midiChannel = 99;
+    const auto fixed = dedale::unpack(dedale::pack(s));
+    REQUIRE(fixed.oversampling == 2);
+    REQUIRE(fixed.midiChannel == 16);
+    REQUIRE(dedale::unpack(0xffffffffu).oversampling == 8); // bits quelconques : toujours 2, 4 ou 8
+    REQUIRE(dedale::unpack(0u).oversampling == 2);
+}
+
+TEST_CASE("Réglage global : le jack RESET peut rappeler le buffer", "[settings][engine]")
+{
+    Rig rig;
+    auto& seq = rig.engine.sequencer();
+    seq.saveBuffer();
+    const auto saved = seq.lane(0).bit;
+    rig.engine.patchBay().connect(Out::clock, In::reset);
+
+    auto wreckAndReset = [&]
+    {
+        for (int i = 0; i < dedale::kMaxSteps; ++i)
+            seq.setStep(0, i, !saved[static_cast<std::size_t>(i)], 1.0f);
+        rig.run(0.5);
+    };
+
+    wreckAndReset(); // par défaut : RESET ne touche pas à la séquence
+    REQUIRE(seq.lane(0).bit != saved);
+
+    rig.engine.setResetRecallsBuffer(true);
+    wreckAndReset();
+    REQUIRE(seq.lane(0).bit == saved);
+}
+
+TEST_CASE("Réglages globaux de la voix : drift et coloration du wavefolder", "[settings][voice]")
+{
+    dedale::Voice voice;
+    dedale::PatchBay bay;
+    voice.prepare(sampleRate, 512);
+    dedale::VoiceParams params;
+    params.fold = 0.0f;
+    params.vcwEg1Amt = 0.0f;
+    params.blend = 0.0f;
+    params.vcwZeroColour = false;
+    const dedale::VoiceCv cv{0.0f, 0.0f, 0.0f, 8.0f};
+
+    auto render = [&](int samples)
+    {
+        voice.reset();
+        std::vector<float> out(static_cast<std::size_t>(samples));
+        for (std::size_t i = 0; i < out.size(); ++i)
+        {
+            if (i % 4 == 0)
+                voice.setControls(params, cv, bay);
+            out[i] = voice.processSample(bay);
+        }
+        return out;
+    };
+
+    SECTION("le drift fait vivre la hauteur de quelques cents, sans la déplacer")
+    {
+        const auto steady = render(192000 * 4);
+        params.analogDrift = true;
+        const auto drifting = render(192000 * 4);
+        REQUIRE(drifting != steady);
+        REQUIRE(measureFrequency(steady, sampleRate) == Approx(110.0).epsilon(0.0005));
+        const auto cents = 1200.0 * std::log2(measureFrequency(drifting, sampleRate) / 110.0);
+        REQUIRE(std::abs(cents) < 8.0); // moyenne sur 4 s : reste tout près de la note
+        // Par tranches d'une demi-seconde, la hauteur bouge mais jamais de plus d'une vingtaine de cents.
+        double widest = 0.0;
+        for (std::size_t start = 0; start + 96000 <= drifting.size(); start += 96000)
+        {
+            const std::vector<float> slice(drifting.begin() + static_cast<std::ptrdiff_t>(start),
+                                           drifting.begin() + static_cast<std::ptrdiff_t>(start + 96000));
+            widest =
+                std::max(widest, std::abs(1200.0 * std::log2(measureFrequency(slice, sampleRate) / 110.0)));
+        }
+        REQUIRE(widest > 0.05);
+        REQUIRE(widest < 20.0);
+    }
+
+    SECTION("la coloration à FOLD = 0 ajoute des harmoniques, et se coupe")
+    {
+        const auto clean = distortion(render(192000), 110.0);
+        params.vcwZeroColour = true;
+        REQUIRE(distortion(render(192000), 110.0) > clean);
     }
 }

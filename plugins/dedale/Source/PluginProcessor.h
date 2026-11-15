@@ -3,16 +3,18 @@
 #include "Engine.h"
 #include "Sequencer/ButtonComboHandler.h"
 #include "Sequencer/Clock.h"
+#include "StateIO.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
 // Enveloppe JUCE autour du moteur (dedale::Engine) : paramètres, horloge interne/hôte, MIDI,
 // suréchantillonnage. Le panneau arrive en phase 5.
-class DedaleProcessor final : public juce::AudioProcessor
+class DedaleProcessor final : public juce::AudioProcessor, private juce::Timer
 {
 public:
     DedaleProcessor();
+    ~DedaleProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -43,6 +45,21 @@ public:
 
     // Accès direct au séquenceur, hors temps réel seulement (rendu offline) : jamais pendant processBlock.
     dedale::GenerativeSequencer& sequencer() noexcept { return engine.sequencer(); }
+
+    // --- État hors paramètres (thread de l'interface) ---
+    // Séquence : copie cohérente de l'état du séquenceur, et restauration prise en compte au bloc audio
+    // suivant.
+    dedale::SequencerState sequencerState() const;
+    void setSequencerState(const dedale::SequencerState& state);
+    dedale::GlobalSettings settings() const noexcept;
+    void setSettings(const dedale::GlobalSettings& settings);
+    // Tout l'état du plugin : paramètres, câbles, réglages globaux, et la séquence si demandé (projet : oui ;
+    // preset : en option).
+    juce::ValueTree captureState(bool withSequence);
+    void applyState(const juce::ValueTree& state, bool withSequence);
+    // Recale les paramètres chain et quant_mode quand le séquenceur les a changés lui-même (rappel du
+    // buffer).
+    void syncParametersFromSequencer();
 
     // --- Interface → audio (à appeler depuis le thread de l'interface) ---
     // Action d'un bouton du panneau : les réglages (quantizer, division) passent par les paramètres, le reste
@@ -111,6 +128,9 @@ private:
     void applyUiActions() noexcept;
     void applyCables() noexcept;
     void publishDisplay() noexcept;
+    void exchangeSequencerState() noexcept;
+    void rebuildOversampling();
+    void timerCallback() override { syncParametersFromSequencer(); }
     bool startHostClock() noexcept;
     void renderChunk(float* output, int numSamples, juce::MidiBufferIterator& event,
                      const juce::MidiBufferIterator& lastEvent, int offset, bool useHost) noexcept;
@@ -138,10 +158,10 @@ private:
     std::atomic<float>* quantModeParam = nullptr;
     std::atomic<float>* orderParam = nullptr;
 
-    // Dernières valeurs poussées au séquenceur : chain et quantizer ne sont réappliqués que s'ils changent,
-    // pour ne pas écraser un rappel de buffer.
-    int lastQuantMode = -1;
-    int lastChain = -1;
+    // Dernières valeurs lues des paramètres chain et quantizer : ils ne sont appliqués que lorsqu'ils
+    // changent, pour ne pas écraser un rappel de buffer.
+    int lastQuantParam = -1;
+    int lastChainParam = -1;
     bool wasRunning = false;
 
     // FIFO des actions de boutons (un producteur : l'interface ; un consommateur : l'audio).
@@ -149,6 +169,18 @@ private:
     juce::AbstractFifo actionFifo{kActionCapacity};
     std::array<dedale::Action, kActionCapacity> actionQueue{};
     bool pendingTrigger = false;
+
+    // Échange de l'état du séquenceur avec l'interface. Le thread audio n'attend jamais ce verrou (tryLock).
+    juce::SpinLock stateLock;
+    dedale::SequencerState publishedState;
+    dedale::SequencerState pendingState;
+    bool hasPendingState = false;
+    bool modesChanged = false; // le séquenceur a changé chain ou quantizer : à répercuter sur les paramètres
+    std::atomic<bool> modesDirty{false};
+
+    std::atomic<std::uint32_t> settingsBits{dedale::pack(dedale::GlobalSettings{})};
+    dedale::GlobalSettings blockSettings; // réglages lus au début du bloc en cours
+    double currentSampleRate = 0.0;
 
     std::array<std::atomic<std::int8_t>, dedale::kNumInputs> cables;
     std::array<std::int8_t, dedale::kNumInputs> appliedCables{};

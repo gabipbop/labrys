@@ -2,6 +2,7 @@
 
 #include "../Calibration.h"
 #include "../Patch/PatchBay.h"
+#include "../Sequencer/Rng.h"
 #include "ModVco.h"
 #include "Noise.h"
 #include "SaturatingMixer.h"
@@ -11,6 +12,7 @@
 #include "Wavefolder.h"
 
 #include <algorithm>
+#include <array>
 
 namespace dedale
 {
@@ -49,6 +51,8 @@ struct VoiceParams
     float blend = 0.5f; // 0 = VCW, 1 = VCF
     float volume = 0.7f;
     float umix1Level = 0.0f;
+    bool analogDrift = false; // réglage global : dérive lente de la hauteur des deux oscillateurs
+    bool vcwZeroColour = calibration::kVcwZeroColour; // réglage global : coloration du wavefolder à FOLD = 0
 };
 
 // Tensions de modulation, en volts.
@@ -82,6 +86,8 @@ class Voice
 {
 public:
     void prepare(double oversampledRate, int maxBlock) noexcept;
+    // Cadence d'appel de setControls (par défaut : un quart de la fréquence suréchantillonnée).
+    void setControlRate(double controlRate) noexcept;
     void reset() noexcept;
     void setControls(const VoiceParams& params, const VoiceCv& cv, const PatchBay& bay) noexcept;
     float
@@ -98,6 +104,11 @@ private:
     VcFilter filter;
     DcBlocker outputDcBlocker;
     GateDetector syncGate;
+    Rng driftRng{0x44524946u};
+    std::array<float, 2> drift{}; // bruit lent, un par oscillateur
+    float driftCoefficient = 0.0f;
+    float driftScale = 0.0f; // vers des octaves
+    bool zeroColour = true;
 
     // Valeurs sans câble, calculées à la fréquence de base.
     float vcoHz = 110.0f;
