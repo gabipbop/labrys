@@ -1,23 +1,26 @@
 # Avancement
 
-## Phase en cours : 0 — Mise en place (branche `phase-0-setup`)
+## Phase 0 — Mise en place : terminée (v0.0.0, PR #1)
+
+## Phase en cours : 1 — Squelette (branche `phase-1-skeleton`)
+
+### Plan
+- JUCE 8.0.15 (FetchContent, tag figé), cible `Dedale` (VST3, AU, Standalone), identité depuis `SuiteIdentity.cmake`.
+- Processor vide (sortie stéreo silencieuse, MIDI in/out), éditeur provisoire.
+- Validation : `auval`, pluginval niveaux 5 et 10, en local et en CI (niveau 5).
 
 ### Fait
-- Manuels de référence dans `docs/reference/` (gitignoré) avec texte extrait : Labyrinth, DFAM, Subharmonicon,
-  Grandmother v2, Mavis v2, quickstart Mavis (images seulement).
-  Manquent : patch book DFAM & Subharmonicon, PDF des réglages globaux avancés du Grandmother, guide « Patching with Intention » du Mavis.
-- Dépôt git, monorepo (`libs/ariane`, `plugins/dedale`), `SuiteIdentity.cmake`.
-- CMake + presets `debug`, `release`, `tests`, `asan`, Catch2 v3.8.1, test smoke : les 4 presets passent en local.
-- `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `.clang-format`, docs de suivi, CI GitHub Actions.
+- Build zéro warning sur les 4 presets ; binaires universal (arm64 + x86_64).
+- `auval -v aumu Ddle Rwps` : OK. pluginval niveau 5 et 10, VST3 et AU : OK.
+- Nom DAW en ASCII (« DEDALE ») après un échec de chargement du VST3 avec l'accent (ADR-007).
+- Plugins rangés sous « LABRYS » dans la DAW au lieu de « Raw Powa Studio » (ADR-010, demande de Gaby).
 
 ### Reste à faire
-- Créer le dépôt GitHub et pousser (décision de Gaby : nom, public/privé), puis vérifier la CI verte.
-- PR de fin de phase 0.
+- Gaby : DÉDALE vérifié dans Ableton, rangé sous LABRYS (2026-11-15).
+- CI verte, puis PR de fin de phase 1.
 
 ### Questions ouvertes
-- Patch points accessibles depuis la DAW, voire entre instruments de la suite (question de Gaby, 2026-11-15) :
-  à trancher avant la phase 4 (patch bay). Voir la proposition dans le fil de discussion.
+- Jacks exposés à la DAW (sorties CV, entrées sidechain), voire entre instruments : à trancher avant la phase 4.
 
-## Prochaine phase : 1 — Squelette
-Projet CMake JUCE 8 (tag figé), plugin vide VST3/AU/Standalone qui se charge dans Ableton/Reaper, passe `auval`
-et `pluginval` niveau 5.
+## Prochaine phase : 2 — Séquenceur
+`GenerativeSequencer` + quantizer + horloge interne/hôte, tous les tests §8.9 verts avant toute UI.

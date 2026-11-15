@@ -20,6 +20,7 @@ Caractère visé : « West Coast », agressif, métallique, percussif.
 ```
 /libs/ariane            bibliothèque partagée (DSP, séquençage, patch bay, UI, outillage)
   /cmake/SuiteIdentity.cmake   SEUL endroit où sont définis noms, codes plugin, bundle IDs
+                               (nom DAW en ASCII, nom accentué seulement dans l'UI : ADR-007)
   /cmake/ArianeWarnings.cmake  cible ariane_warnings (-Wall -Wextra -Wpedantic ...)
 /plugins/dedale         code propre à DÉDALE (Source/{DSP,Sequencer,Patch,UI}, Tests/)
 /tutorial               site web interactif (phase 8)
@@ -35,9 +36,11 @@ cmake --preset tests && cmake --build --preset tests && ctest --preset tests   #
 cmake --preset asan && cmake --build --preset asan && ctest --preset asan      # ASan + UBSan
 cmake --preset release && cmake --build --preset release && ctest --preset release  # universal, -Werror (= CI)
 git ls-files '*.cpp' '*.h' | xargs clang-format -i                              # formatage
+tools/pluginval.sh build/release/plugins/dedale/Dedale_artefacts/Release/VST3/Dedale.vst3 10  # pluginval
+auval -v aumu Ddle Rwps                                                         # AU (après build debug, qui installe)
 ```
 Dépendances via `FetchContent` à **tag figé** (jamais `main`), partagées dans `build/_deps`.
-Versions figées : Catch2 v3.8.1. JUCE : à figer en phase 1.
+Versions figées : JUCE 8.0.15, Catch2 v3.8.1, pluginval v1.0.4.
 
 ## Conventions de code (§12)
 - Code DSP isolé de JUCE (`Source/DSP/` sans include JUCE, sauf `juce::dsp::Oversampling` si besoin).
@@ -49,6 +52,10 @@ Versions figées : Catch2 v3.8.1. JUCE : à figer en phase 1.
 - IDs de paramètres APVTS en `snake_case`, **jamais renommés** après la v1.
 - Constantes à calibrer à l'oreille : toutes dans `Calibration.h`, documentées dans `docs/CALIBRATION.md`.
 - Zéro warning. Style : `.clang-format` (Allman, 4 espaces, 110 colonnes).
+
+## Coût GitHub
+Gaby ne doit rien payer : repo public, runners standard seulement, pas de CI pour les docs seules, `concurrency`.
+Si un job est refusé pour facturation, prévenir Gaby au lieu de relancer.
 
 ## Git (§15.4)
 - `main` toujours vert, **jamais de commit direct**. Une branche par phase (`phase-2-sequencer`...).

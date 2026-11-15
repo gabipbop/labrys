@@ -14,9 +14,12 @@
     },
     {
       "name": "debug",
-      "displayName": "Debug",
+      "displayName": "Debug (plugins copiés dans ~/Library/Audio/Plug-Ins pour la DAW et auval)",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "LABRYS_COPY_PLUGINS": "ON"
+      }
     },
     {
       "name": "release",

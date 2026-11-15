@@ -12,3 +12,4 @@ NamespaceIndentation: None
 SortIncludes: CaseSensitive
 IncludeBlocks: Regroup
 SpaceAfterTemplateKeyword: true
+AccessModifierOffset: -4

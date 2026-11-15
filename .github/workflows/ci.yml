@@ -1,13 +1,22 @@
 name: CI
 
+# Coût : repo public + runner standard macos-latest = gratuit. On évite quand même les runs inutiles :
+# pas de CI pour les changements de docs seuls, et un nouveau push annule le run en cours sur la même branche.
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**.md']
   pull_request:
+    paths-ignore: ['docs/**', '**.md']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -31,3 +40,14 @@ jobs:
 
       - name: Tests
         run: ctest --preset release
+
+      - name: pluginval niveau 5 (VST3)
+        run: tools/pluginval.sh build/release/plugins/dedale/Dedale_artefacts/Release/VST3/Dedale.vst3 5
+
+      - name: auval + pluginval niveau 5 (AU)
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/release/plugins/dedale/Dedale_artefacts/Release/AU/Dedale.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -v aumu Ddle Rwps
+          tools/pluginval.sh ~/Library/Audio/Plug-Ins/Components/Dedale.component 5
