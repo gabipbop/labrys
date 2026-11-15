@@ -57,6 +57,7 @@ constexpr std::array<ContinuousSpec, DedaleProcessor::numContinuous> kContinuous
     {"eg2_decay", "EG2 DECAY", 0.01f, 10.0f, 0.4f, true},
     {"eg_trig_mix", "EG TRIG MIX", 0.0f, 1.0f, 0.0f},
     {"volume", "VOLUME", 0.0f, 1.0f, 0.7f},
+    {"umix1_lvl", "U MIX 1 LVL", 0.0f, 1.0f, 0.0f},
 }};
 } // namespace
 
@@ -115,12 +116,12 @@ DedaleProcessor::DedaleProcessor()
 
 void DedaleProcessor::seedSequencer(std::uint32_t seed) noexcept
 {
-    seq.seed(seed);
+    engine.sequencer().seed(seed);
     dedale::Rng pattern(seed ^ 0xa5a5a5a5u);
     for (int lane = 0; lane < dedale::kNumLanes; ++lane)
         for (int step = 0; step < dedale::kMaxSteps; ++step)
-            seq.setStep(lane, step, pattern.uniform() < 0.5f, pattern.bipolarVolts());
-    seq.reset();
+            engine.sequencer().setStep(lane, step, pattern.uniform() < 0.5f, pattern.bipolarVolts());
+    engine.sequencer().reset();
 }
 
 void DedaleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -134,10 +135,7 @@ void DedaleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
     internalClock.prepare(sampleRate);
     hostClock.reset();
-    eg1.prepare(sampleRate, maxChunk);
-    eg2.prepare(sampleRate, maxChunk);
-    voice.prepare(sampleRate * static_cast<double>(oversampling->getOversamplingFactor()), maxChunk);
-    voice.reset();
+    engine.prepare(sampleRate, static_cast<int>(oversampling->getOversamplingFactor()), maxChunk);
     wasRunning = false;
 
     smoothingCoefficient =
@@ -157,20 +155,20 @@ bool DedaleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 void DedaleProcessor::pullParameters() noexcept
 {
     const auto running = runParam->load() > 0.5f;
-    seq.setRunning(running);
+    engine.sequencer().setRunning(running);
     if (running && !wasRunning)
         internalClock.reset(); // le premier pas tombe dès l'appui sur RUN
     wasRunning = running;
 
     if (const auto mode = juce::roundToInt(quantModeParam->load()) - 1; mode != lastQuantMode)
-        seq.setQuantizerMode(lastQuantMode = mode);
+        engine.sequencer().setQuantizerMode(lastQuantMode = mode);
     if (const auto chain = chainParam->load() > 0.5f ? 1 : 0; chain != lastChain)
-        seq.setChain((lastChain = chain) == 1);
+        engine.sequencer().setChain((lastChain = chain) == 1);
 
     for (std::size_t lane = 0; lane < corruptParams.size(); ++lane)
     {
-        seq.setCorrupt(static_cast<int>(lane), corruptParams[lane]->load());
-        seq.setCvRange(static_cast<int>(lane), rangeParams[lane]->load());
+        engine.sequencer().setCorrupt(static_cast<int>(lane), corruptParams[lane]->load());
+        engine.sequencer().setCvRange(static_cast<int>(lane), rangeParams[lane]->load());
     }
     for (std::size_t i = 0; i < targets.size(); ++i)
         targets[i] = continuousParams[i]->load();
@@ -222,7 +220,8 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     midi.clear();
 }
 
-// Séquenceur et enveloppes à la fréquence de base ; sources, VCW et VCF dans le bloc suréchantillonné (§12).
+// Contrôle (séquenceur, enveloppes, triggers) à la fréquence de base ; audio dans le bloc suréchantillonné
+// (§12).
 void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBufferIterator& event,
                                   const juce::MidiBufferIterator& lastEvent, int offset,
                                   bool useHost) noexcept
@@ -246,60 +245,51 @@ void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBuffe
         {
             if (const auto message = (*event).getMessage(); message.isNoteOn())
             {
-                seq.setRootSemitones(message.getNoteNumber() - cal::kMidiRootNote);
-                manualTrigger = !seq.isRunning();
+                engine.sequencer().setRootSemitones(message.getNoteNumber() - cal::kMidiRootNote);
+                manualTrigger = !engine.sequencer().isRunning();
             }
         }
 
         for (std::size_t p = 0; p < smoothed.size(); ++p)
             smoothed[p] += (targets[p] - smoothed[p]) * smoothingCoefficient;
 
-        // CLOCK 2 est normalisé sur CLOCK 1 : les deux lanes reçoivent le même tick (jacks en phase 4).
         const auto internalTick = internalClock.processSample(stepsPerMinute);
         const auto tick = useHost ? hostClock.processSample(division) : internalTick;
-        const auto trigger1 = tick && seq.tick(0);
-        const auto trigger2 = tick && seq.tick(1);
 
-        // EG TRIG MIX : vélocité de chaque flux de triggers ; sur un même pas, la plus forte gagne (§7).
-        const auto mix = smoothed[egTrigMix];
-        const auto velocity = manualTrigger
-                                  ? 1.0f
-                                  : juce::jmax(trigger1 ? juce::jmin(1.0f, 2.0f * (1.0f - mix)) : 0.0f,
-                                               trigger2 ? juce::jmin(1.0f, 2.0f * mix) : 0.0f);
-        eg1.trigger(velocity);
-        eg2.trigger(velocity);
+        dedale::EngineParams params;
+        params.eg1Decay = smoothed[eg1Decay];
+        params.eg2Decay = smoothed[eg2Decay];
+        params.egTrigMix = smoothed[egTrigMix];
+        auto& v = params.voice;
+        v.vcoFreq = smoothed[vcoFreq];
+        v.vcoEg1Amt = smoothed[vcoEg1Amt];
+        v.vcoSeq1Amt = smoothed[vcoSeq1Amt];
+        v.mvcoFreq = smoothed[mvcoFreq];
+        v.mvcoEg1Amt = smoothed[mvcoEg1Amt];
+        v.mvcoSeq2Amt = smoothed[mvcoSeq2Amt];
+        v.fmAmt = smoothed[mvcoFmAmt];
+        v.mixVco = smoothed[mixVco];
+        v.mixRing = smoothed[mixRing];
+        v.mixMvco = smoothed[mixMvco];
+        v.mixNoise = smoothed[mixNoise];
+        v.noiseTone = smoothed[noiseTone];
+        v.fold = smoothed[vcwFold];
+        v.bias = smoothed[vcwBias];
+        v.vcwEg1Amt = smoothed[vcwEg1Amt];
+        v.vcwSeq1Amt = smoothed[vcwSeq1Amt];
+        v.cutoff = smoothed[vcfCutoff];
+        v.vcfEg1Amt = smoothed[vcfEg1Amt];
+        v.vcfSeq2Amt = smoothed[vcfSeq2Amt];
+        v.resonance = smoothed[vcfRes];
+        v.filterMode = smoothed[vcfMode];
+        v.order = order;
+        v.blend = smoothed[blend];
+        v.volume = smoothed[volume];
+        v.umix1Level = smoothed[umix1Lvl];
 
-        dedale::VoiceParams params;
-        params.vcoFreq = smoothed[vcoFreq];
-        params.vcoEg1Amt = smoothed[vcoEg1Amt];
-        params.vcoSeq1Amt = smoothed[vcoSeq1Amt];
-        params.mvcoFreq = smoothed[mvcoFreq];
-        params.mvcoEg1Amt = smoothed[mvcoEg1Amt];
-        params.mvcoSeq2Amt = smoothed[mvcoSeq2Amt];
-        params.fmAmt = smoothed[mvcoFmAmt];
-        params.mixVco = smoothed[mixVco];
-        params.mixRing = smoothed[mixRing];
-        params.mixMvco = smoothed[mixMvco];
-        params.mixNoise = smoothed[mixNoise];
-        params.noiseTone = smoothed[noiseTone];
-        params.fold = smoothed[vcwFold];
-        params.bias = smoothed[vcwBias];
-        params.vcwEg1Amt = smoothed[vcwEg1Amt];
-        params.vcwSeq1Amt = smoothed[vcwSeq1Amt];
-        params.cutoff = smoothed[vcfCutoff];
-        params.vcfEg1Amt = smoothed[vcfEg1Amt];
-        params.vcfSeq2Amt = smoothed[vcfSeq2Amt];
-        params.resonance = smoothed[vcfRes];
-        params.filterMode = smoothed[vcfMode];
-        params.order = order;
-        params.blend = smoothed[blend];
-        params.volume = smoothed[volume];
-
-        const dedale::VoiceCv cv{seq.cv(0), seq.cv(1), eg1.processSample(smoothed[eg1Decay]),
-                                 eg2.processSample(smoothed[eg2Decay])};
-        voice.setControls(params, cv);
+        engine.processControl(params, tick, manualTrigger);
         for (int k = 0; k < factor; ++k)
-            fast[i * factor + k] = voice.processSample();
+            fast[i * factor + k] = engine.processAudio();
     }
 
     juce::dsp::AudioBlock<float> result(&output, 1, static_cast<size_t>(numSamples));

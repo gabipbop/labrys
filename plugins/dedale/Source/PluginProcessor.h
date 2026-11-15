@@ -1,15 +1,13 @@
 #pragma once
 
-#include "DSP/DecayEnv.h"
-#include "DSP/Voice.h"
+#include "Engine.h"
 #include "Sequencer/Clock.h"
-#include "Sequencer/GenerativeSequencer.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
-// Phase 3 : le séquenceur pilote la voix complète, avec les normalisations par défaut câblées en dur.
-// La patch bay arrive en phase 4, le panneau en phase 5.
+// Enveloppe JUCE autour du moteur (dedale::Engine) : paramètres, horloge interne/hôte, MIDI,
+// suréchantillonnage. Le panneau arrive en phase 5.
 class DedaleProcessor final : public juce::AudioProcessor
 {
 public:
@@ -43,8 +41,10 @@ public:
     // phase 5).
     void seedSequencer(std::uint32_t seed) noexcept;
 
-    // Accès direct au séquenceur, hors temps réel seulement (rendu offline) : jamais pendant processBlock.
-    dedale::GenerativeSequencer& sequencer() noexcept { return seq; }
+    // Accès direct au séquenceur et à la patch bay, hors temps réel seulement (rendu offline) : jamais
+    // pendant processBlock. L'UI passera par une FIFO en phase 5.
+    dedale::GenerativeSequencer& sequencer() noexcept { return engine.sequencer(); }
+    dedale::PatchBay& patchBay() noexcept { return engine.patchBay(); }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -78,6 +78,7 @@ public:
         eg2Decay,
         egTrigMix,
         volume,
+        umix1Lvl,
         numContinuous
     };
 
@@ -88,12 +89,9 @@ private:
     void renderChunk(float* output, int numSamples, juce::MidiBufferIterator& event,
                      const juce::MidiBufferIterator& lastEvent, int offset, bool useHost) noexcept;
 
-    dedale::GenerativeSequencer seq;
+    dedale::Engine engine;
     dedale::InternalClock internalClock;
     dedale::HostClock hostClock;
-    dedale::DecayEnv eg1;
-    dedale::DecayEnv eg2;
-    dedale::Voice voice;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::AudioBuffer<float>
         scratch; // un canal, à la fréquence de base : entrée (vide) du suréchantillonneur

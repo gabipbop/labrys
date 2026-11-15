@@ -77,6 +77,17 @@ jour à sa demande) : ses retours d'écoute seront intégrés quand ils arrivero
 - Drift analogique, interrupteur de coloration du VCW, oversampling réglable : phase 6.
 - U MIX (`umix1_lvl`), SYNC du MOD VCO, entrées audio directes : phase 4. Bouton TRIGGER : phase 5.
 
-## Prochaine phase : 4 — Patch bay
-Routeur par échantillon, normalisations cassables, feedback avec délai d'un échantillon.
-Question ouverte : jacks exposés à la DAW (sorties CV, entrées sidechain), à trancher avant de commencer.
+## Phase en cours : 4 — Patch bay (branche `phase-4-patchbay`, empilée sur `phase-3-voice`)
+Démarrée à la demande de Gaby (2026-11-15), PR 4 ouverte et retours d'écoute des phases 2 et 3 encore attendus.
+Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phase 6), rien en phase 4.
+
+### Plan
+- `Source/Patch/PatchBay.h` : 20 entrées, 12 sorties, un câble par entrée, normalisations cassées par le câble,
+  détecteur de gate à hystérésis (+1 V / +0,5 V).
+- `Source/Engine.{h,cpp}` (pur) : reprend l'orchestration du processor (séquenceur, enveloppes, voix) et lit ses
+  entrées dans la patch bay. Contrôle à la fréquence de base, audio suréchantillonné ; une sortie pas encore
+  calculée est lue avec un échantillon de retard (feedback).
+- `Voice` lit ses entrées dans la patch bay (1V/OCT, SYNC, FOLD, CUTOFF, VCA CV, BLEND, VCW IN, VCF IN, U MIX).
+- Tests d'abord : `Tests/PatchTests.cpp` (routage, normalisations, M VCO → BIT FLIP à l'audio-rate, CLOCK 2
+  indépendant, RESET, TRIGGER / EG2 TRIG, feedback stable). Les golden de la phase 3 ne doivent pas bouger.
+- Paramètre `umix1_lvl`. Rendus `patch_*`, checklist, PR.
