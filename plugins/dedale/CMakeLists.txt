@@ -1,8 +1,9 @@
 # DÉDALE : plugin (VST3, AU, Standalone) + tests.
 # Noms et codes : libs/ariane/cmake/SuiteIdentity.cmake
 
-# Cœur pur (aucun JUCE) : séquenceur, quantizer, horloges. Partagé par le plugin, les tests et les outils.
+# Cœur pur (aucun JUCE) : séquenceur, quantizer, horloges, DSP de la voix. Partagé par le plugin, les tests et les outils.
 add_library(dedale_core STATIC
+    Source/DSP/Voice.cpp
     Source/Sequencer/Clock.cpp
     Source/Sequencer/GenerativeSequencer.cpp
     Source/Sequencer/Quantizer.cpp)
@@ -42,6 +43,7 @@ target_link_libraries(Dedale
     PRIVATE
         dedale_core
         juce::juce_audio_utils
+        juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags)
@@ -51,19 +53,32 @@ set_source_files_properties(Source/PluginProcessor.cpp Source/PluginEditor.cpp
     TARGET_DIRECTORY Dedale
     PROPERTIES COMPILE_OPTIONS "$<TARGET_PROPERTY:ariane_warnings,INTERFACE_COMPILE_OPTIONS>")
 
-# DedaleRender : rendu hors temps réel des scénarios d'écoute (WAV dans renders/, §15.6).
-# L'outil lie le code partagé du plugin (cible statique Dedale) et reprend ses includes et définitions JUCE,
-# sans recompiler les modules.
+# Outils et tests qui instancient le processor hors temps réel : ils lient le code partagé du plugin (cible
+# statique Dedale) et reprennent ses includes et définitions JUCE, sans recompiler les modules.
+function(dedale_link_processor target)
+    target_link_libraries(${target} PRIVATE Dedale dedale_core ariane_warnings)
+    target_include_directories(${target} SYSTEM PRIVATE $<TARGET_PROPERTY:Dedale,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(${target} PRIVATE $<TARGET_PROPERTY:Dedale,COMPILE_DEFINITIONS>)
+endfunction()
+
+# DedaleRender : rendu des scénarios d'écoute (WAV dans renders/, §15.6) et des métriques de référence.
 add_executable(DedaleRender Tools/DedaleRender.cpp)
-target_link_libraries(DedaleRender PRIVATE Dedale dedale_core ariane_warnings)
-target_include_directories(DedaleRender SYSTEM PRIVATE $<TARGET_PROPERTY:Dedale,INCLUDE_DIRECTORIES>)
-target_compile_definitions(DedaleRender PRIVATE $<TARGET_PROPERTY:Dedale,COMPILE_DEFINITIONS>)
+dedale_link_processor(DedaleRender)
 
 if(LABRYS_BUILD_TESTS)
     add_executable(DedaleTests
         Tests/ClockTests.cpp
+        Tests/DspTests.cpp
         Tests/QuantizerTests.cpp
         Tests/SequencerTests.cpp)
     target_link_libraries(DedaleTests PRIVATE dedale_core ariane_warnings Catch2::Catch2WithMain)
     catch_discover_tests(DedaleTests)
+
+    # Golden tests : rendus complets du plugin comparés à des métriques versionnées.
+    add_executable(DedaleGoldenTests Tests/GoldenTests.cpp)
+    dedale_link_processor(DedaleGoldenTests)
+    target_link_libraries(DedaleGoldenTests PRIVATE Catch2::Catch2)
+    target_compile_definitions(DedaleGoldenTests PRIVATE
+        DEDALE_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/golden/metrics.json")
+    add_test(NAME "Golden : rendus de référence" COMMAND DedaleGoldenTests)
 endif()
