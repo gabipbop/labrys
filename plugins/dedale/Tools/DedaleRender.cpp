@@ -45,9 +45,8 @@ int writeGolden(const juce::File& file)
     return file.replaceWithText(juce::JSON::toString(juce::var(root.get())) + "\n") ? 0 : 1;
 }
 // Capture du panneau : séquenceur en marche, quelques câbles posés, à 200 %.
-int writeUi(const juce::File& directory, int skinIndex)
+int writeUi(const juce::File& directory)
 {
-    dedale::ui::setSkin(skinIndex);
     DedaleProcessor processor;
     processor.seedSequencer(render::kDefaultSeed);
     render::internalClock(processor);
@@ -80,7 +79,7 @@ int writeUi(const juce::File& directory, int skinIndex)
 
     if (!directory.createDirectory())
         return 1;
-    const auto file = directory.getChildFile("panneau_" + juce::String(skinIndex) + ".png");
+    const auto file = directory.getChildFile("panneau.png");
     file.deleteFile();
     juce::FileOutputStream stream(file);
     return stream.openedOk() && juce::PNGImageFormat().writeImageToStream(image, stream) ? 0 : 1;
@@ -95,8 +94,7 @@ int main(int argc, char* argv[])
     if (argc > 2 && juce::String(argv[1]) == "--golden")
         return writeGolden(workingDirectory.getChildFile(argv[2]));
     if (argc > 2 && juce::String(argv[1]) == "--ui")
-        return writeUi(workingDirectory.getChildFile(argv[2]),
-                       argc > 3 ? juce::String(argv[3]).getIntValue() : 0);
+        return writeUi(workingDirectory.getChildFile(argv[2]));
 
     const auto directory = workingDirectory.getChildFile(argc > 1 ? argv[1] : "renders");
     const auto seed = argc > 2 ? static_cast<std::uint32_t>(juce::String(argv[2]).getLargeIntValue())

@@ -15,6 +15,7 @@
 
 ## Dépendances
 - JUCE 8.0.15 (FetchContent) ; `juce_dsp` pour le suréchantillonnage seulement.
+- Police Chakra Petch (licence OFL, `plugins/dedale/Resources/fonts`), embarquée par `juce_add_binary_data`.
 - Catch2 v3.8.1 (FetchContent, tests seulement).
 - pluginval v1.0.4 (téléchargé par `tools/pluginval.sh`).
 

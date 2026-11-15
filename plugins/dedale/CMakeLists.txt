@@ -39,15 +39,8 @@ set(DEDALE_PLUGIN_SOURCES
     Source/UI/Widgets.cpp)
 target_sources(Dedale PRIVATE ${DEDALE_PLUGIN_SOURCES})
 
-# Police de l'interface (Barlow Condensed, licence OFL : Resources/fonts/OFL-*.txt), embarquée dans le binaire.
+# Police de l'interface (Chakra Petch, licence OFL : Resources/fonts/OFL-ChakraPetch.txt), embarquée dans le binaire.
 juce_add_binary_data(DedaleAssets SOURCES
-    Resources/fonts/BarlowCondensed-SemiBold.ttf
-    Resources/fonts/BarlowCondensed-Bold.ttf
-    Resources/fonts/SairaCondensed-SemiBold.ttf
-    Resources/fonts/SairaCondensed-Bold.ttf
-    Resources/fonts/SairaStencilOne-Regular.ttf
-    Resources/fonts/ShareTechMono-Regular.ttf
-    Resources/fonts/Quantico-Bold.ttf
     Resources/fonts/ChakraPetch-SemiBold.ttf
     Resources/fonts/ChakraPetch-Bold.ttf)
 

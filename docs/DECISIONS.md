@@ -158,10 +158,13 @@ son horloge et son CV RANGE. Le reste est interprété :
 ## ADR-017 — Interface (2026-11-15)
 - **Direction** : après deux séries de maquettes, Gaby a choisi un rendu « synthé matériel classique » (esprit
   Mariana) : façade noire, modules encadrés avec cartouche, knobs à jupe noire et capuchon métal, libellés
-  au-dessus des réglages, boutons carrés lumineux. **Un seul thème, le noir** (écart au §11.2, qui en prévoyait
-  deux). Rien de la marque Moog : ni logo, ni nom, ni police, ni bois (flancs en cuivre anodisé).
-- **Encore à revoir (retour de Gaby)** : la police (Barlow Condensed) et les LEDs, vers quelque chose de plus
-  agressif et industriel. Les deux sont isolées (`ui::font()` dans `Widgets.cpp`, `SequencerLeds::paint`).
+  au-dessus des réglages, boutons lumineux. **Un seul thème, le noir** (écart au §11.2, qui en prévoyait deux).
+  Rien de la marque Moog : ni logo, ni nom, ni police, ni bois.
+- **Habillage** : la première version (Barlow Condensed, LEDs rondes, cuivre et ambre) a été jugée « trop gentille
+  et trop IA ». Parmi trois habillages plus industriels rendus par le plugin, Gaby a retenu : police **Chakra
+  Petch** (OFL, écart au §11.2 qui citait Barlow Condensed ou Space Grotesk), **LEDs et boutons à pans coupés**,
+  **accent rouge** (au lieu du cuivre/orange du §11.2), cadres de modules arrondis, **flancs noirs vissés**, vis
+  apparentes aux coins des modules. Le write head est repéré par deux traits cyan au-dessus et au-dessous de la LED.
 - **Structure** : le panneau est dessiné dans un repère fixe 960 × 444 (`UI/Layout.h` donne toutes les positions) et
   l'éditeur lui applique une échelle (75 % à 200 %, proportions fixes, taille mémorisée dans le state). Tout est
   vectoriel. La façade statique est mise en cache dans une image ; LEDs, afficheur, oscilloscope et câbles sont

@@ -117,21 +117,17 @@ Direction validée par Gaby (2026-11-15) après deux séries de maquettes : rend
 **Un seul thème, le noir** (décision de Gaby : pas de thème clair, contrairement au §11.2 de la spec).
 Pas de logo, nom, police ni bois Moog (règle du projet).
 
-### Retours de Gaby à traiter (2026-11-15, pendant le codage)
-- **Typo** : il n'aime pas du tout Barlow Condensed. À remplacer.
-- **LEDs** : « affreuses ». À redessiner.
-- Direction générale : plus **agressif / industriel**. Le rendu actuel fait « trop gentil et trop IA ».
-- Proposé le même jour : trois habillages rendus par le plugin (`docs/checkpoints/phase-5/panneau_1..3.png`,
-  `panneau_0.png` = première version), choisis par `ui::setSkin` : **1 Acier** (Saira Condensed + pochoir,
-  fentes lumineuses, rouge signal, pans coupés, vis), **2 Terminal** (Share Tech Mono, voyants carrés, blanc et
-  rouge), **3 Chantier** (Chakra Petch, pastilles à pans coupés, jaune, flancs à bandes). **En attente du choix
-  de Gaby** ; les habillages non retenus et leurs polices seront retirés.
+### Habillage retenu (Gaby, 2026-11-15)
+Après avoir trouvé la première version « trop gentille et trop IA » (typo et LEDs), Gaby a choisi parmi trois
+habillages rendus par le plugin : **Chantier** (police Chakra Petch, LEDs et boutons à pans coupés), avec
+**l'accent rouge** et **les bordures de Terminal** (cadres de modules arrondis, flancs noirs vissés au lieu des
+bandes jaunes). Les autres habillages et leurs polices sont retirés.
 
 ### Plan
 - `Sequencer/ButtonComboHandler` (pur, tests d'abord) : combinaisons du §8.4, appui long de BUFFER, bouton SHIFT
   qui verrouille les appuis pour les combinaisons à la souris.
 - Processor : FIFO d'actions UI → audio, câbles et état d'affichage en atomics, tampon d'oscilloscope.
-- `Source/UI` : thème noir, police Barlow Condensed (OFL) en BinaryData, knobs et boutons vectoriels,
+- `Source/UI` : thème noir, police Chakra Petch (OFL) en BinaryData, knobs et boutons vectoriels,
   LEDs du séquenceur, afficheur du quantizer, sélecteur ORDER, oscilloscope, patch bay avec câbles à glisser.
 - Éditeur redimensionnable de 75 % à 200 %, infobulles, valeur affichée pendant le réglage.
 - Vérification : captures PNG du panneau par `DedaleRender --ui`, pluginval, auval.
@@ -143,8 +139,11 @@ Pas de logo, nom, police ni bois Moog (règle du projet).
   bay avec câbles, infobulles, redimensionnement. Captures : `docs/checkpoints/phase-5/`.
 - 54 tests verts sur les 4 presets et sous ASan ; pluginval niveau 10 **avec** ses tests d'éditeur et `auval` : OK.
 
-### Reste à faire
-- **Essai par Gaby dans la DAW** : les interactions à la souris (knobs, boutons, combinaisons, câbles) ne sont
-  pas testées automatiquement.
-- Retours de Gaby ci-dessus : typo et LEDs, direction plus agressive et industrielle.
-- Checklist de la phase, PR.
+### En attente
+- **Essai par Gaby dans la DAW** : les interactions à la souris (knobs, boutons, combinaisons avec SHIFT, câbles)
+  ne sont pas testées automatiquement. Questions dans `LISTENING_CHECKLIST.md`, section phase 5.
+- Retours d'écoute des phases 2, 3 et 4.
+
+## Prochaine phase : 6 — Finitions
+State complet (séquence, câbles, réglages globaux), presets, MIDI clock et MIDI out, jacks HOST, oversampling
+réglable, profiling CPU.
