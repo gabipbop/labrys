@@ -77,7 +77,7 @@ jour à sa demande) : ses retours d'écoute seront intégrés quand ils arrivero
 - Drift analogique, interrupteur de coloration du VCW, oversampling réglable : phase 6.
 - U MIX (`umix1_lvl`), SYNC du MOD VCO, entrées audio directes : phase 4. Bouton TRIGGER : phase 5.
 
-## Phase en cours : 4 — Patch bay (branche `phase-4-patchbay`, PR #5)
+## Phase 4 — Patch bay : mergée (v0.4.0, PR #5), réponses d'écoute encore attendues
 Démarrée à la demande de Gaby (2026-11-15), retours d'écoute des phases 2 et 3 encore attendus.
 Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phase 6), rien en phase 4.
 
@@ -111,5 +111,17 @@ Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phas
 ### Reporté
 - Câbles dans le state, câblage depuis l'UI pendant la lecture : phases 5 et 6. Jacks exposés à la DAW : phase 6.
 
-## Prochaine phase : 5 — UI
-Panneau complet, câbles, LEDs, combos de boutons + bouton SHIFT, redimensionnement, deux thèmes.
+## Phase en cours : 5 — UI (branche `phase-5-ui`)
+Direction validée par Gaby (2026-11-15) après deux séries de maquettes : rendu « synthé matériel classique »
+(esprit Mariana), façade noire à modules encadrés, knobs à jupe noire et capuchon métal, flancs cuivre.
+**Un seul thème, le noir** (décision de Gaby : pas de thème clair, contrairement au §11.2 de la spec).
+Pas de logo, nom, police ni bois Moog (règle du projet).
+
+### Plan
+- `Sequencer/ButtonComboHandler` (pur, tests d'abord) : combinaisons du §8.4, appui long de BUFFER, bouton SHIFT
+  qui verrouille les appuis pour les combinaisons à la souris.
+- Processor : FIFO d'actions UI → audio, câbles et état d'affichage en atomics, tampon d'oscilloscope.
+- `Source/UI` : thème noir, police Barlow Condensed (OFL) en BinaryData, knobs et boutons vectoriels,
+  LEDs du séquenceur, afficheur du quantizer, sélecteur ORDER, oscilloscope, patch bay avec câbles à glisser.
+- Éditeur redimensionnable de 75 % à 200 %, infobulles, valeur affichée pendant le réglage.
+- Vérification : captures PNG du panneau par `DedaleRender --ui`, pluginval, auval.

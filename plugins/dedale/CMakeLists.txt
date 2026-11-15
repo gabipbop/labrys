@@ -5,6 +5,7 @@
 add_library(dedale_core STATIC
     Source/Engine.cpp
     Source/DSP/Voice.cpp
+    Source/Sequencer/ButtonComboHandler.cpp
     Source/Sequencer/Clock.cpp
     Source/Sequencer/GenerativeSequencer.cpp
     Source/Sequencer/Quantizer.cpp)
@@ -68,6 +69,7 @@ dedale_link_processor(DedaleRender)
 
 if(LABRYS_BUILD_TESTS)
     add_executable(DedaleTests
+        Tests/ButtonComboTests.cpp
         Tests/ClockTests.cpp
         Tests/DspTests.cpp
         Tests/PatchTests.cpp
