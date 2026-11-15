@@ -39,7 +39,8 @@ git ls-files '*.cpp' '*.h' | xargs clang-format -i                              
 tools/pluginval.sh build/release/plugins/dedale/Dedale_artefacts/Release/VST3/Dedale.vst3 10  # pluginval
 auval -v aumu Ddle Rwps                                                         # AU (après build debug, qui installe)
 build/debug/plugins/dedale/DedaleRender renders 7                                # rendus WAV (dossier, seed)
-tools/.venv/bin/python -I tools/analyse.py renders/*.wav --grid 0.25 --png renders/spectrograms  # mesures
+tools/.venv/bin/python -I tools/analyse.py renders/*.wav --png renders/spectrograms             # mesures
+build/debug/plugins/dedale/DedaleRender --golden plugins/dedale/Tests/golden/metrics.json        # refige les golden
 ```
 Dépendances via `FetchContent` à **tag figé** (jamais `main`), partagées dans `build/_deps`.
 Versions figées : JUCE 8.0.15, Catch2 v3.8.1, pluginval v1.0.4.
@@ -81,7 +82,7 @@ Si une étape échoue deux fois pour la même raison : s'arrêter, résumer dans
 
 ## Vérifier le son sans l'écouter (§15.6)
 Cible `DedaleRender` (WAV 48 kHz/24 bits dans `renders/`), `tools/analyse.py` (environnement `tools/.venv`, ADR-014),
-golden tests en métriques JSON (changement volontaire = commit séparé et justifié), spectrogrammes PNG aux checkpoints.
+golden tests `DedaleGoldenTests` en métriques JSON (changement volontaire = commit séparé et justifié), spectrogrammes PNG aux checkpoints.
 
 ## Checkpoints avec Gaby (§15.7)
 Fin des phases 2, 3, 4, 5, 7 : PR + 3 à 6 rendus WAV nommés + 5 à 10 questions dans `LISTENING_CHECKLIST.md`.

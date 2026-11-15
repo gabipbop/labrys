@@ -40,5 +40,44 @@ Vérifié par Gaby dans Ableton (rangé sous LABRYS), auval et pluginval 10 OK.
 ### Questions ouvertes
 - Jacks exposés à la DAW (sorties CV, entrées sidechain), voire entre instruments : à trancher avant la phase 4.
 
-## Prochaine phase : 3 — Voix
-VCO + MOD VCO + TZFM + ring + noise + mixeur + VCW + VCF + VCAs + EGs + BLEND + ORDER, normalisations en dur.
+## Phase en cours : 3 — Voix (branche `phase-3-voice`, empilée sur `phase-2-sequencer`)
+Démarrée à la demande de Gaby (2026-11-15) avant ses réponses au checkpoint de la phase 2 : la PR 3 reste ouverte,
+ses retours d'écoute seront intégrés quand ils arriveront.
+
+### Plan
+- Modules DSP purs dans `Source/DSP` (dans `dedale_core`) : `Vco` (sinus, TZFM), `ModVco` (triangle PolyBLAMP),
+  `Noise`, `SaturatingMixer`, `Wavefolder`, `VcFilter` (SVF TPT), `DecayEnv`, `Voice` (câblage par défaut, ORDER,
+  VCAs, BLEND, sortie). Constantes dans `Calibration.h`.
+- Tests d'abord (§15.6) : `Tests/DspTests.cpp` (fréquence, 1 V/oct, −3 dB, pas d'auto-oscillation, VCA à 0 V,
+  decay à −60 dB, triangle anti-aliasé, mixeur, folder).
+- Processor : paramètres du §10 pour la voix, lissage ~20 ms, enveloppes à la fréquence de base, voix
+  suréchantillonnée ×4 (`juce::dsp::Oversampling`). `DebugBeep` supprimé.
+- Rendus `init_patch`, `tzfm_sweep`, `fold_sweep`, `fold_bias_sweep`, `vcf_res_sweep`, `mixer_drive`,
+  `order_compare` ; golden tests en métriques JSON ; mesure d'aliasing dans `tools/analyse.py`.
+- Checkpoint : `LISTENING_CHECKLIST.md`, spectrogrammes, PR.
+
+### Fait
+- 8 modules DSP purs + `Voice`, 11 tests DSP (fréquence et 1 V/oct à ±3 cents, TZFM, triangle anti-aliasé, bruit,
+  mixeur, folder, filtre à −3 dB et sans auto-oscillation, VCA, enveloppe à −60 dB, voix complète).
+- Processor : 27 paramètres de voix (§10), lissage 20 ms, enveloppes et EG TRIG MIX, suréchantillonnage ×4.
+- 14 scénarios de rendu, golden tests (`DedaleGoldenTests`, métriques dans `Tests/golden/metrics.json`).
+- `tools/analyse.py` : mesure d'aliasing (`--f0`), détection de clics relative au timbre. Aucun clic, aucune
+  valeur non finie sur les 14 rendus.
+- 40 tests verts sur les 4 presets et sous ASan/UBSan ; pluginval niveau 10 (VST3, AU) et `auval` : OK.
+- Coût : environ 60 fois le temps réel en release sur ce Mac (budget de la phase 6 : 20 fois).
+
+### En attente
+- **Réponses de Gaby aux checkpoints des phases 2 et 3** (`LISTENING_CHECKLIST.md`) avant la phase 4.
+- Merge de la PR 3 (phase 2), puis rebase de `phase-3-voice` sur `main`.
+
+### Hypothèses à valider (ADR-015)
+- Modèle du wavefolder et toutes ses constantes ; loi d'EG TRIG MIX ; profondeurs de modulation d'EG1.
+- DC-block avant l'écrêtage de sécurité (écart au §6). Aliasing à ×4 : −32,7 dB dans le pire cas.
+
+### Reporté
+- Drift analogique, interrupteur de coloration du VCW, oversampling réglable : phase 6.
+- U MIX (`umix1_lvl`), SYNC du MOD VCO, entrées audio directes : phase 4. Bouton TRIGGER : phase 5.
+
+## Prochaine phase : 4 — Patch bay
+Routeur par échantillon, normalisations cassables, feedback avec délai d'un échantillon.
+Question ouverte : jacks exposés à la DAW (sorties CV, entrées sidechain), à trancher avant de commencer.

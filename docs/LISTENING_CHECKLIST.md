@@ -36,3 +36,38 @@ Questions :
    s'arrête avec le transport ? Et faut-il repartir du pas 1 à chaque lecture ?
 10. Si tu as le hardware ou des enregistrements : les gammes 7 (diminished 6th), 9 (hirajoshi) et 15 (handpan)
     correspondent-elles ? Ce sont des interprétations.
+
+## Checkpoint phase 3 — Voix
+
+Mêmes commandes de rendu. Les rendus `seq_*` de la phase 2 passent maintenant par la vraie voix (patch init) : les
+questions de la phase 2 restent valables, avec un son plus parlant que le bip. Spectrogrammes :
+`docs/checkpoints/phase-3/`. Tous les rendus : motif SEQ1 `.xx.xx.x`, 4 pas par seconde.
+
+| Fichier | Contenu |
+|---|---|
+| `init_patch.wav` | Réglages par défaut, sans rien toucher |
+| `tzfm_sweep.wav` | Note fixe, chemin VCW sans pli, FM AMT de 0 à fond (MOD VCO à l'unisson du VCO) |
+| `fold_sweep.wav` | Note fixe, chemin VCW seul, FOLD de 0 à fond |
+| `fold_bias_sweep.wav` | FOLD à 0,6, BIAS de −1 à +1 |
+| `vcf_res_sweep.wav` | Chemin VCF seul, VCO + bruit, l'enveloppe ouvre le filtre, RESONANCE de 0 à fond |
+| `mixer_drive.wav` | Chemin VCF seul, VCO LVL de midi à fond |
+| `order_compare.wav` | 4 s en PARALLEL, 4 s en VCW>VCF, 4 s en VCF>VCW |
+| `alias_fold_high.wav` | Note tenue à 2,5 kHz, FOLD à fond : test d'aliasing |
+
+Questions :
+1. `init_patch.wav` : est-ce un bon son de départ, percussif et métallique, ou trop sage / trop agressif ? Le niveau
+   de sortie te convient-il ?
+2. `init_patch.wav` : l'attaque des notes est-elle franche sans clic ? Entends-tu un clic quand deux notes
+   s'enchaînent vite ?
+3. `fold_sweep.wav` : le début (FOLD à 0) est-il assez propre ? La montée est-elle progressive ? Vers la fin, est-ce
+   trop dur, ou pas assez ?
+4. `fold_sweep.wav` : à certains réglages la fondamentale s'efface presque (le son devient creux). Normal pour un
+   folder, mais est-ce gênant autour du réglage par défaut (0,3) ?
+5. `fold_bias_sweep.wav` : BIAS change-t-il nettement la couleur ? Le milieu (BIAS à 0) est-il le plus « plein » ?
+6. `tzfm_sweep.wav` : la note reste-t-elle bien la même pendant que le timbre s'enrichit ? La fin est-elle assez
+   métallique ?
+7. `vcf_res_sweep.wav` : la résonance à fond est-elle assez marquée sans siffler ? Les graves tiennent-ils ?
+8. `mixer_drive.wav` : la saturation du mixeur est-elle musicale ? Assez « crade » en butée ?
+9. `order_compare.wav` : les trois modes sont-ils nettement différents ?
+10. `alias_fold_high.wav` : entends-tu des sons parasites graves ou « numériques » sous la note aiguë ? Si oui, le
+    mode ×8 passera en priorité en phase 6.

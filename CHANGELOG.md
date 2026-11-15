@@ -10,8 +10,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions sém
 - Quantizer à 16 modes, transposable par Note On MIDI.
 - Horloge interne (10 à 600 pas/min) et synchronisation sur le transport de la DAW, à l'échantillon près.
 - Paramètres : `tempo`, `sync_mode`, `clock_div`, `seq1_corrupt`, `seq2_corrupt`, `seq1_range`, `seq2_range`, `run`,
-  `chain`, `quant_mode`. Bip sinus de debug à chaque trigger (provisoire).
+  `chain`, `quant_mode`.
 - Outils : `DedaleRender` (rendus WAV hors temps réel) et `tools/analyse.py` (mesures et spectrogrammes).
+- Voix complète : VCO sinus à FM through-zero, MOD VCO triangle, ring mod, bruit à tonalité variable, mixeur
+  saturant, wavefolder, filtre SVF passe-bas ↔ passe-bande, deux VCA, deux enveloppes decay, ORDER, BLEND.
+  Le patch par défaut sonne sans câble. Suréchantillonnage ×4.
+- 27 paramètres de voix (`vco_freq` … `volume`, `order`), lissés sur 20 ms.
+- Golden tests : 14 rendus de référence comparés en métriques. Mesure d'aliasing dans `tools/analyse.py`.
+### Retiré
+- Bip sinus de debug de la phase 2.
 
 ## [0.0.0] — 2026-11-15
 ### Ajouté
