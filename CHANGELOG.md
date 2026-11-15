@@ -23,6 +23,12 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions sém
 - Interface : panneau complet façon synthé matériel (noir, accent rouge, modules encadrés, knobs vectoriels,
   boutons et LEDs à pans coupés), LEDs du séquenceur, combinaisons de boutons avec bouton SHIFT, patch bay avec câbles à glisser, oscilloscope,
   infobulles, fenêtre redimensionnable de 75 % à 200 %. Valeurs des paramètres affichées avec leur unité.
+- Sauvegarde complète du projet : séquence, buffer, câbles et réglages globaux reviennent à la réouverture.
+- Presets : dix presets d'usine et presets utilisateur, barre de presets dans l'en-tête du panneau.
+- Réglages globaux (menu engrenage) : RESET qui rappelle le buffer, polarité des CV, drift analogique, coloration
+  du wavefolder, suréchantillonnage ×2/×4/×8.
+- MIDI : horloge MIDI, Start/Stop/Continue, choix du canal, sortie MIDI des séquences en notes.
+- `DedaleBench` : mesure du coût CPU avec un budget de 5 % d'un cœur.
 ### Retiré
 - Bip sinus de debug de la phase 2.
 

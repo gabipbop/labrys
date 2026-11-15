@@ -42,6 +42,7 @@ build/debug/plugins/dedale/DedaleRender renders 7                               
 tools/.venv/bin/python -I tools/analyse.py renders/*.wav --png renders/spectrograms             # mesures
 build/debug/plugins/dedale/DedaleRender --golden plugins/dedale/Tests/golden/metrics.json        # refige les golden
 build/debug/plugins/dedale/DedaleRender --ui renders/ui                          # capture PNG du panneau
+build/release/plugins/dedale/DedaleBench 5                                       # coût CPU, budget en % d'un cœur
 ```
 Dépendances via `FetchContent` à **tag figé** (jamais `main`), partagées dans `build/_deps`.
 Versions figées : JUCE 8.0.15, Catch2 v3.8.1, pluginval v1.0.4.

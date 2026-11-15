@@ -82,6 +82,8 @@ public:
         std::atomic<bool> chained{false};
         std::atomic<bool> running{false};
         std::atomic<bool> hasBuffer{false};
+        std::atomic<std::uint32_t> clockTicks{
+            0}; // compte les ticks d'horloge : le write head clignote dessus
     };
     Display display;
     // Copie dans destination les derniers échantillons de sortie disponibles pour l'oscilloscope.
@@ -180,6 +182,7 @@ private:
     juce::AbstractFifo actionFifo{kActionCapacity};
     std::array<dedale::Action, kActionCapacity> actionQueue{};
     bool pendingTrigger = false;
+    std::uint32_t clockTicks = 0;
 
     // Échange de l'état du séquenceur avec l'interface. Le thread audio n'attend jamais ce verrou (tryLock).
     juce::SpinLock stateLock;

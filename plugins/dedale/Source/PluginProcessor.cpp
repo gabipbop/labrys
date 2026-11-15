@@ -503,6 +503,7 @@ void DedaleProcessor::publishDisplay() noexcept
     display.chained.store(seq.isChained(), std::memory_order_relaxed);
     display.running.store(seq.isRunning(), std::memory_order_relaxed);
     display.hasBuffer.store(seq.hasBuffer(), std::memory_order_relaxed);
+    display.clockTicks.store(clockTicks, std::memory_order_relaxed);
 
     if (const juce::SpinLock::ScopedTryLockType lock(stateLock); lock.isLocked())
         publishedState = seq.state();
@@ -600,6 +601,7 @@ void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBuffe
         v.analogDrift = blockSettings.analogDrift;
         v.vcwZeroColour = blockSettings.vcwZeroColour;
 
+        clockTicks += tick ? 1u : 0u;
         engine.processControl(params, tick, manualTrigger);
         emitMidiNotes(offset + i);
         for (int k = 0; k < factor; ++k)

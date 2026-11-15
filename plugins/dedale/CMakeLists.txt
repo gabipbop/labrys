@@ -79,6 +79,10 @@ endfunction()
 add_executable(DedaleRender Tools/DedaleRender.cpp)
 dedale_link_processor(DedaleRender)
 
+# DedaleBench : coût de processBlock, avec un budget de CPU (§15.8).
+add_executable(DedaleBench Tools/DedaleBench.cpp)
+dedale_link_processor(DedaleBench)
+
 if(LABRYS_BUILD_TESTS)
     add_executable(DedaleTests
         Tests/ButtonComboTests.cpp
@@ -98,4 +102,8 @@ if(LABRYS_BUILD_TESTS)
         DEDALE_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/golden/metrics.json")
     add_test(NAME "Golden : rendus de référence" COMMAND DedaleGoldenTests "[golden]")
     add_test(NAME "Processor : projet et réglages" COMMAND DedaleGoldenTests "~[golden]")
+    # Le budget de CPU n'a de sens que sur un build optimisé.
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_test(NAME "Budget de CPU" COMMAND DedaleBench 5)
+    endif()
 endif()

@@ -118,3 +118,19 @@ Questions :
 8. Lisibilité générale : libellés, contraste, densité. Le module Wavefolder est un peu vide : je resserre, ou tu
    veux y voir autre chose ?
 9. L'habillage final (Chakra Petch, rouge, pans coupés) est-il bien ce que tu voulais une fois dans la DAW ?
+
+## Checkpoint phase 6 — Finitions
+
+À essayer dans Ableton.
+
+1. Sauver le projet avec une séquence, des câbles et un buffer enregistré, fermer Ableton, rouvrir : tout
+   revient-il à l'identique ?
+2. Presets : les dix presets d'usine te parlent-ils ? Lesquels sont ratés ou trop proches ? Les noms te plaisent-ils ?
+3. Charger un preset pendant que ça joue : la séquence et le tempo restent-ils en place, comme attendu ?
+4. Enregistrer un preset à toi, le recharger, le supprimer : le menu est-il clair ?
+5. Menu engrenage : le drift analogique s'entend-il (essaie « Cloche TZFM » avec et sans) ? Trop, pas assez ?
+6. Suréchantillonnage ×8 : entends-tu une différence sur un son très plié et aigu ? Le ×2 est-il acceptable ?
+7. Sortie MIDI activée, une piste MIDI d'Ableton qui enregistre DÉDALE : les notes des deux séquenceurs
+   arrivent-elles (SEQ1 sur le canal 1, SEQ2 sur le canal 2) ? La durée des notes (80 ms) te convient-elle ?
+8. Si tu as une source de MIDI clock : Start, Stop et Continue pilotent-ils bien le séquenceur ?
+9. Veux-tu des jacks exposés à la DAW (quatre macros automatisables, une entrée audio sidechain) ?

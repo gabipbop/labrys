@@ -71,6 +71,8 @@ private:
     juce::uint64 shown = ~juce::uint64{0};
     ButtonComboHandler::DisplayMode displayMode = ButtonComboHandler::DisplayMode::sequence;
     int division = 1;
+    std::uint32_t lastTick = 0;
+    int flashFrames = 0; // le repère du write head s'allume à chaque tick d'horloge, puis retombe
 };
 
 // Afficheur : mode du quantizer, ou division d'horloge pendant son réglage.

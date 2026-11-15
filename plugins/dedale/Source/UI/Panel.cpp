@@ -343,6 +343,14 @@ void Panel::showSettingsMenu()
     menu.addItem(4, juce::String::fromUTF8("Coloration du wavefolder à FOLD = 0"), true, s.vcwZeroColour);
     menu.addSubMenu(juce::String::fromUTF8("Suréchantillonnage"), quality);
 
+    juce::PopupMenu channel;
+    channel.addItem(100, "Tous (omni)", true, s.midiChannel == 0);
+    for (int i = 1; i <= 16; ++i)
+        channel.addItem(100 + i, juce::String(i), true, s.midiChannel == i);
+    menu.addSectionHeader("MIDI");
+    menu.addSubMenu("Canal MIDI", channel);
+    menu.addItem(5, juce::String::fromUTF8("Sortie MIDI : jouer les séquences en notes"), true, s.midiOut);
+
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(settingsButton),
                        [safe = juce::Component::SafePointer<Panel>(this)](int choice)
                        {
@@ -357,6 +365,10 @@ void Panel::showSettingsMenu()
                                settings.analogDrift = !settings.analogDrift;
                            else if (choice == 4)
                                settings.vcwZeroColour = !settings.vcwZeroColour;
+                           else if (choice == 5)
+                               settings.midiOut = !settings.midiOut;
+                           else if (choice >= 100)
+                               settings.midiChannel = choice - 100;
                            else
                                settings.oversampling = choice - 10;
                            safe->processor.setSettings(settings);

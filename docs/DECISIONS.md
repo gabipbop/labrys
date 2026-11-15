@@ -185,3 +185,30 @@ son horloge et son CV RANGE. Le reste est interprété :
   testées automatiquement : à essayer dans la DAW.
 - **Reporté** : rappel du buffer qui ne met pas à jour les paramètres `chain` et `quant_mode` affichés par la DAW
   (phase 6, avec le state complet) ; clignotement du write head en rythme.
+
+## ADR-018 — Sauvegarde du projet, réglages globaux, presets, MIDI, budget de CPU (2026-11-15)
+- **État sauvegardé** : l'arbre des paramètres, plus trois enfants : `SEQUENCER` (bits, tensions, longueurs,
+  têtes, rotations, buffer, quantizer, chain), `CABLES` (table des 20 entrées) et `SETTINGS` (réglages globaux),
+  avec `stateVersion = 1`. Lecture tolérante : un enfant absent garde les valeurs courantes (projets d'avant la
+  phase 6), une valeur hors bornes est ramenée dans les bornes (`GenerativeSequencer::setState`, `unpack`).
+  La seed du générateur aléatoire n'est pas sauvegardée : la séquence est retrouvée à l'identique, ses mutations
+  futures ne sont pas rejouées.
+- **Échange avec le thread audio** : l'interface lit et écrit l'état du séquenceur sous un `SpinLock` que le thread
+  audio ne prend qu'en `tryLock` (il n'attend jamais). Une restauration est appliquée au début du bloc suivant ;
+  d'ici là, `sequencerState()` rend l'état en attente, pour qu'un « charger puis sauver » immédiat soit fidèle.
+- **Paramètres pilotés par le moteur** : `chain`, `quant_mode` (rappel du buffer) et `run` (Start/Stop MIDI) peuvent
+  changer côté audio. Le thread audio n'applique un paramètre que lorsqu'il change, et une minuterie du processor
+  (15 Hz, thread de l'interface) recale les paramètres sur l'état réel.
+- **Réglages globaux** : rangés dans un entier atomique (`Settings.h`). Changer le suréchantillonnage suspend le
+  traitement le temps de reconstruire le suréchantillonneur. **Drift activé par défaut** (±2 cents, `kDriftCents`).
+- **Presets** : un preset est un patch (réglages et câbles). Il ne touche ni à la séquence, ni au transport (RUN,
+  TEMPO, synchro, division), ni aux réglages globaux. Presets d'usine dans le code (`Presets.cpp`), presets
+  utilisateur en XML dans `~/Library/Application Support/Raw Powa Studio/Dedale/Presets`.
+- **MIDI** : priorité des horloges MIDI > hôte > interne. Start et Continue arment l'horloge MIDI tout de suite,
+  sinon l'horloge interne jouait un pas de trop avant la première impulsion (bug trouvé par les tests).
+  Sortie MIDI : note = do 4 + CV quantifiée, durée fixe (`kMidiOutGateSeconds`), SEQ2 sur le canal suivant.
+- **Budget de CPU** : `DedaleBench` mesure le meilleur de trois passes et échoue au-delà de 5 % d'un cœur. Mesuré :
+  1,65 % (patch init) et 2,97 % (patch lourd, quatre modulations à l'audio-rate) en ×4 à 48 kHz. Le test n'est
+  enregistré que sur un build Release.
+- **Non fait** : jacks exposés à la DAW (macros, sidechain), option de la spec à décider avec Gaby ; resserrage du
+  module Wavefolder (question posée à Gaby dans la checklist de la phase 5).
