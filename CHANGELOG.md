@@ -17,6 +17,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions sém
   Le patch par défaut sonne sans câble. Suréchantillonnage ×4.
 - 27 paramètres de voix (`vco_freq` … `volume`, `order`), lissés sur 20 ms.
 - Golden tests : 14 rendus de référence comparés en métriques. Mesure d'aliasing dans `tools/analyse.py`.
+- Patch bay de 32 points : 20 entrées, 12 sorties, normalisations cassées par un câble, modulation à l'audio-rate,
+  boucles de feedback. Entrées trigger avec hystérésis. Mixeur utilitaire U MIX (`umix1_lvl`).
+  Pas encore de câbles à l'écran : le câblage se fait par le code en attendant le panneau.
 ### Retiré
 - Bip sinus de debug de la phase 2.
 

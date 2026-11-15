@@ -91,3 +91,26 @@ Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phas
 - Tests d'abord : `Tests/PatchTests.cpp` (routage, normalisations, M VCO → BIT FLIP à l'audio-rate, CLOCK 2
   indépendant, RESET, TRIGGER / EG2 TRIG, feedback stable). Les golden de la phase 3 ne doivent pas bouger.
 - Paramètre `umix1_lvl`. Rendus `patch_*`, checklist, PR.
+
+### Fait
+- `PatchBay` (20 entrées, 12 sorties), `GateDetector`, `Engine` ; `Voice` lit ses 12 entrées dans la patch bay.
+- 10 tests de patch : câbles et normalisations, hystérésis, M VCO → BIT FLIP 1 à l'audio-rate (environ 500 flips
+  par seconde, sans crash), CLOCK 2 indépendant (4 contre 3 pas par seconde), CLOCK 1 qui entraîne CLOCK 2, RESET,
+  TRIGGER et EG2 TRIG, neuf câbles de feedback simultanés (sortie finie et bornée), chaque entrée de la voix.
+- Les 14 golden de la phase 3 passent sans changement après le déplacement de l'orchestration dans `Engine`.
+- Paramètre `umix1_lvl`. 6 rendus `patch_*`, ajoutés aux golden (20 scénarios).
+- 50 tests verts sur les 4 presets et sous ASan/UBSan ; pluginval niveau 10 (VST3, AU) et `auval` : OK.
+- Coût inchangé : environ 58 fois le temps réel en release.
+
+### En attente
+- **Réponses de Gaby aux checkpoints des phases 2, 3 et 4** (`LISTENING_CHECKLIST.md`).
+- Merge de la PR 4 (phase 3), puis recalage de `phase-4-patchbay` sur `main`.
+
+### Hypothèses à valider (ADR-016)
+- EG2 TRIG patché isole EG2 ; échelle des CV externes (±5 V = toute la course) ; U MIX saturé à ±10 V.
+
+### Reporté
+- Câbles dans le state, câblage depuis l'UI pendant la lecture : phases 5 et 6. Jacks exposés à la DAW : phase 6.
+
+## Prochaine phase : 5 — UI
+Panneau complet, câbles, LEDs, combos de boutons + bouton SHIFT, redimensionnement, deux thèmes.

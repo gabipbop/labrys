@@ -71,3 +71,29 @@ Questions :
 9. `order_compare.wav` : les trois modes sont-ils nettement différents ?
 10. `alias_fold_high.wav` : entends-tu des sons parasites graves ou « numériques » sous la note aiguë ? Si oui, le
     mode ×8 passera en priorité en phase 6.
+
+## Checkpoint phase 4 — Patch bay
+
+Mêmes commandes de rendu. Il n'y a pas encore de câbles à l'écran (phase 5) : ces rendus sont patchés par le code.
+Spectrogrammes : `docs/checkpoints/phase-4/`.
+
+| Fichier | Câbles | Ce qu'on doit entendre |
+|---|---|---|
+| `patch_bitflip_lfo.wav` | M VCO (0,7 Hz) → BIT FLIP 1 | Le rythme de SEQ1 se réécrit en continu |
+| `patch_clock2_polymeter.wav` | M VCO (3 Hz) → CLOCK 2 | SEQ2 à 3 pas par seconde contre 4 pour SEQ1 |
+| `patch_fm_1voct.wav` | M VCO → U MIX 1, U MIX 1+2 → VCO 1V/OCT | FM exponentielle, dosée par U MIX 1 LVL de 0 à 0,3 |
+| `patch_noise_cutoff.wav` | NOISE → CUTOFF | Le bruit module le filtre, de plus en plus fort |
+| `patch_eg1_vcw_vca.wav` | EG1 → VCW VCA CV | Claquement court du folder sur la longue queue du filtre |
+| `patch_feedback.wav` | VCA → VCF IN | La sortie revient dans le filtre |
+
+Questions :
+1. `patch_bitflip_lfo.wav` : le rythme change-t-il de façon vivante, ou trop vite pour rester musical ?
+2. `patch_clock2_polymeter.wav` : entends-tu bien deux tempos indépendants (4 contre 3) ?
+3. `patch_fm_1voct.wav` : la FM monte-t-elle progressivement ? Est-ce un son utile, ou faut-il un atténuateur plus
+   fin que U MIX 1 LVL ?
+4. `patch_noise_cutoff.wav` : la modulation du filtre par le bruit donne-t-elle un grain intéressant ?
+5. `patch_eg1_vcw_vca.wav` : les deux decays sont-ils bien distincts (attaque courte, queue longue) ?
+6. `patch_feedback.wav` : le feedback apporte-t-il du caractère sans devenir incontrôlable ?
+7. Avec un câble dans EG2 TRIG, j'ai supposé que le VCA ne suit plus les triggers des séquenceurs, seulement ce
+   jack. Est-ce le comportement que tu attends ?
+8. Faut-il exposer des jacks à la DAW (sorties CV, entrée sidechain) ? La spec le prévoit en option en phase 6.

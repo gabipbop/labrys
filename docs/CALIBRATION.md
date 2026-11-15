@@ -36,5 +36,8 @@ Chaque constante de `Calibration.h` : valeur, pourquoi, comment l'écouter. Les 
 | `kOutputHeadroom` / `kOutputClipKneeVolts` | 0,7 / 3,5 V | Le patch init reste sous l'écrêtage de sécurité | Niveau général dans la DAW | |
 | `kOversamplingStages` | 2 (×4) | §4 : ×4 minimum | `alias_fold_high.wav` (−32,7 dB non harmonique) | |
 | `kParamSmoothingSeconds` | 20 ms | §10 | Tourner un paramètre vite : pas de zipper | |
+| `kTriggerPulseSeconds` | 1 ms | §8.2 : trigger de 1 ms, 0 → +5 V | Sans effet audible seul ; largeur des impulsions SEQ TRIG et CLOCK | |
+| `kRailVolts` | 10 V | Plafond de U MIX, comme les rails du circuit | Reboucler U MIX sur U MIX 2 : sature au lieu de diverger | |
+| `kEg2TrigJackIsolatesEg2` | oui | Hypothèse (ADR-016) | Câble dans EG2 TRIG : le VCA ne suit plus que ce jack | |
 
 Gammes du quantizer à vérifier (`// TODO calibrate` dans `Quantizer.cpp`) : 7 (diminished 6th), 9 (hirajoshi), 15 (handpan).

@@ -130,3 +130,27 @@ son horloge et son CV RANGE. Le reste est interprété :
   U MIX et `umix1_lvl`, SYNC du MOD VCO, entrées audio directes (phase 4, ils n'ont de sens qu'avec les jacks) ;
   bouton TRIGGER (phase 5 ; d'ici là, un Note On à l'arrêt déclenche les deux enveloppes).
 - Phase démarrée à la demande de Gaby avant ses réponses au checkpoint de la phase 2.
+
+## ADR-016 — Patch bay et moteur (2026-11-15)
+- **Structure** : `PatchBay` est un tableau de tensions de sortie (12) et un tableau de sources par entrée (20).
+  Lire une entrée rend la tension de la sortie reliée, ou la valeur de normalisation passée par le module. Pas de
+  graphe ni de tri : chaque module lit la dernière valeur écrite, donc une sortie pas encore recalculée dans
+  l'échantillon courant est lue avec **un échantillon de retard**. C'est ce qui rend les boucles de feedback sûres.
+- **Deux cadences** : les entrées trigger/gate (CLOCK, BIT FLIP, RESET, TRIGGER, EG2 TRIG) et les sorties du
+  séquenceur et des enveloppes sont traitées à la fréquence de base dans `Engine::processControl`. Les entrées audio
+  et CV de la voix sont relues à chaque échantillon suréchantillonné dans `Voice::processSample`. Une entrée CV sans
+  câble garde sa valeur calculée à la fréquence de base (aucun coût), une entrée patchée est recalculée par
+  échantillon (`exp2`, `tan` du filtre) : c'est ce qui permet la FM et la modulation de cutoff à l'audio-rate.
+- **`Engine`** (pur, dans `dedale_core`) reprend l'orchestration qui vivait dans le processor. Le processor ne garde
+  que JUCE : paramètres, horloge interne/hôte, MIDI, suréchantillonnage. Les golden de la phase 3 passent sans
+  changement après ce déplacement.
+- **Hypothèses** :
+  - un câble dans **EG2 TRIG** isole EG2, qui ne suit plus ni TRIGGER ni les triggers des séquenceurs
+    (`kEg2TrigJackIsolatesEg2`). Le manuel dit seulement que TRIGGER ne déclenche plus que EG1 ;
+  - CV externes dans FOLD et BLEND : ±5 V couvrent toute la course du knob (EG1 : 8 V pour toute la course) ;
+  - SEQ TRIG et CLOCK sortent des impulsions de 1 ms à +5 V ; CLOCK suit l'horloge maître même à l'arrêt ;
+  - U MIX sature à ±10 V (`kRailVolts`), sinon une sortie rebouclée sur U MIX 2 à gain unité divergerait ;
+  - les jacks 1V/OCT n'ont pas d'atténuateur (comme sur le panneau) : on passe par U MIX 1 LVL pour doser une FM.
+- **Jacks exposés à la DAW** : rien en phase 4, on suit la spec §9 (extension facultative de la phase 6).
+- **Reporté** : câbles dans le state et changement de câble pendant la lecture (FIFO UI → audio) : phases 5 et 6.
+  Réglage « RESET rappelle le buffer » : phase 6.
