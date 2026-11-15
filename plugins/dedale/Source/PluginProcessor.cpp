@@ -27,14 +27,25 @@ struct ContinuousSpec
     float maximum;
     float defaultValue;
     bool exponential = false;
+    char unit = '%'; // '%' : pourcentage, 'h' : hertz, 's' : secondes
 };
+
+juce::String describe(float value, char unit)
+{
+    if (unit == 'h')
+        return juce::String(value, value < 100.0f ? 1 : 0) + " Hz";
+    if (unit == 's')
+        return value < 1.0f ? juce::String(juce::roundToInt(value * 1000.0f)) + " ms"
+                            : juce::String(value, 2) + " s";
+    return juce::String(juce::roundToInt(value * 100.0f)) + " %";
+}
 
 // Paramètres continus du §10, dans l'ordre de DedaleProcessor::Continuous.
 constexpr std::array<ContinuousSpec, DedaleProcessor::numContinuous> kContinuous{{
-    {"vco_freq", "VCO FREQUENCY", 20.0f, 5000.0f, 110.0f, true},
+    {"vco_freq", "VCO FREQUENCY", 20.0f, 5000.0f, 110.0f, true, 'h'},
     {"vco_eg1_amt", "VCO EG1 AMT", -1.0f, 1.0f, 0.0f},
     {"vco_seq1_amt", "VCO SEQ1 AMT", 0.0f, 1.0f, 1.0f},
-    {"mvco_freq", "MOD VCO FREQUENCY", 0.1f, 1300.0f, 55.0f, true},
+    {"mvco_freq", "MOD VCO FREQUENCY", 0.1f, 1300.0f, 55.0f, true, 'h'},
     {"mvco_eg1_amt", "MOD VCO EG1 AMT", -1.0f, 1.0f, 0.0f},
     {"mvco_seq2_amt", "MOD VCO SEQ2 AMT", 0.0f, 1.0f, 0.0f},
     {"mvco_fm_amt", "FM AMT", 0.0f, 1.0f, 0.0f},
@@ -47,14 +58,14 @@ constexpr std::array<ContinuousSpec, DedaleProcessor::numContinuous> kContinuous
     {"vcw_bias", "VCW BIAS", -1.0f, 1.0f, 0.0f},
     {"vcw_eg1_amt", "VCW EG1/CV AMT", -1.0f, 1.0f, 0.3f},
     {"vcw_seq1_amt", "VCW SEQ1 AMT", 0.0f, 1.0f, 0.0f},
-    {"vcf_cutoff", "VCF CUTOFF", 20.0f, 20000.0f, 800.0f, true},
+    {"vcf_cutoff", "VCF CUTOFF", 20.0f, 20000.0f, 800.0f, true, 'h'},
     {"vcf_eg1_amt", "VCF EG1/CV AMT", -1.0f, 1.0f, 0.3f},
     {"vcf_seq2_amt", "VCF SEQ2 AMT", 0.0f, 1.0f, 0.0f},
     {"vcf_res", "RESONANCE", 0.0f, 1.0f, 0.2f},
     {"vcf_mode", "FILTER MODE", 0.0f, 1.0f, 0.0f},
     {"blend", "BLEND", 0.0f, 1.0f, 0.5f},
-    {"eg1_decay", "EG1 DECAY", 0.01f, 10.0f, 0.3f, true},
-    {"eg2_decay", "EG2 DECAY", 0.01f, 10.0f, 0.4f, true},
+    {"eg1_decay", "EG1 DECAY", 0.01f, 10.0f, 0.3f, true, 's'},
+    {"eg2_decay", "EG2 DECAY", 0.01f, 10.0f, 0.4f, true, 's'},
     {"eg_trig_mix", "EG TRIG MIX", 0.0f, 1.0f, 0.0f},
     {"volume", "VOLUME", 0.0f, 1.0f, 0.7f},
     {"umix1_lvl", "U MIX 1 LVL", 0.0f, 1.0f, 0.0f},
@@ -70,25 +81,36 @@ juce::AudioProcessorValueTreeState::ParameterLayout DedaleProcessor::createParam
     const juce::NormalisableRange<float> unit{0.0f, 1.0f};
 
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    const auto percent = juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+        [](float value, int) { return describe(value, '%'); });
     for (const auto& spec : kContinuous)
     {
         const auto range = spec.exponential ? exponentialRange(spec.minimum, spec.maximum)
                                             : juce::NormalisableRange<float>{spec.minimum, spec.maximum};
-        layout.add(std::make_unique<Float>(id(spec.id), spec.name, range, spec.defaultValue));
+        const auto attributes = juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [unit = spec.unit](float value, int) { return describe(value, unit); });
+        layout.add(std::make_unique<Float>(id(spec.id), spec.name, range, spec.defaultValue, attributes));
     }
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         id("order"), "ORDER", juce::StringArray{"PARALLEL", "VCW>VCF", "VCF>VCW"}, 0));
 
+    // TEMPO : en pas par minute, avec l'équivalent en hertz (§8.6).
     layout.add(std::make_unique<Float>(
         id("tempo"), "TEMPO", exponentialRange(cal::kTempoMinStepsPerMinute, cal::kTempoMaxStepsPerMinute),
-        cal::kTempoDefaultStepsPerMinute));
+        cal::kTempoDefaultStepsPerMinute,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [](float value, int)
+            {
+                return juce::String(juce::roundToInt(value)) + " pas/min (" + juce::String(value / 60.0f, 1) +
+                       " Hz)";
+            })));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         id("sync_mode"), "SYNC", juce::StringArray{"INTERNAL", "HOST"}, kSyncHost));
     layout.add(std::make_unique<Int>(id("clock_div"), "DIVISION", 1, 16, 1));
-    layout.add(std::make_unique<Float>(id("seq1_corrupt"), "SEQ1 CORRUPT", unit, 0.0f));
-    layout.add(std::make_unique<Float>(id("seq2_corrupt"), "SEQ2 CORRUPT", unit, 0.0f));
-    layout.add(std::make_unique<Float>(id("seq1_range"), "SEQ1 CV RANGE", unit, 0.3f));
-    layout.add(std::make_unique<Float>(id("seq2_range"), "SEQ2 CV RANGE", unit, 0.3f));
+    layout.add(std::make_unique<Float>(id("seq1_corrupt"), "SEQ1 CORRUPT", unit, 0.0f, percent));
+    layout.add(std::make_unique<Float>(id("seq2_corrupt"), "SEQ2 CORRUPT", unit, 0.0f, percent));
+    layout.add(std::make_unique<Float>(id("seq1_range"), "SEQ1 CV RANGE", unit, 0.3f, percent));
+    layout.add(std::make_unique<Float>(id("seq2_range"), "SEQ2 CV RANGE", unit, 0.3f, percent));
     layout.add(std::make_unique<Bool>(id("run"), "RUN/STOP", false));
     layout.add(std::make_unique<Bool>(id("chain"), "CHAIN SEQ", false));
     layout.add(std::make_unique<Int>(id("quant_mode"), "QUANTIZER", 1, 16, cal::kDefaultQuantizerMode + 1));
@@ -115,6 +137,7 @@ DedaleProcessor::DedaleProcessor()
     quantModeParam = apvts.getRawParameterValue("quant_mode");
 
     seedSequencer(static_cast<std::uint32_t>(juce::Random::getSystemRandom().nextInt()));
+    publishDisplay();
 }
 
 void DedaleProcessor::seedSequencer(std::uint32_t seed) noexcept

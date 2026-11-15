@@ -117,6 +117,12 @@ Direction validée par Gaby (2026-11-15) après deux séries de maquettes : rend
 **Un seul thème, le noir** (décision de Gaby : pas de thème clair, contrairement au §11.2 de la spec).
 Pas de logo, nom, police ni bois Moog (règle du projet).
 
+### Retours de Gaby à traiter (2026-11-15, pendant le codage)
+- **Typo** : il n'aime pas du tout Barlow Condensed. À remplacer.
+- **LEDs** : « affreuses ». À redessiner.
+- Direction générale : plus **agressif / industriel**. Le rendu actuel fait « trop gentil et trop IA ».
+- À faire une fois le panneau fonctionnel : proposer des variantes sur de vraies captures du plugin.
+
 ### Plan
 - `Sequencer/ButtonComboHandler` (pur, tests d'abord) : combinaisons du §8.4, appui long de BUFFER, bouton SHIFT
   qui verrouille les appuis pour les combinaisons à la souris.
@@ -125,3 +131,16 @@ Pas de logo, nom, police ni bois Moog (règle du projet).
   LEDs du séquenceur, afficheur du quantizer, sélecteur ORDER, oscilloscope, patch bay avec câbles à glisser.
 - Éditeur redimensionnable de 75 % à 200 %, infobulles, valeur affichée pendant le réglage.
 - Vérification : captures PNG du panneau par `DedaleRender --ui`, pluginval, auval.
+
+### Fait
+- `ButtonComboHandler` et ses tests (combinaisons du §8.4, appui long de BUFFER).
+- Pont interface ↔ audio dans le processor (FIFO d'actions, table de câbles, état d'affichage, oscilloscope).
+- Panneau complet (`Source/UI`) : 32 knobs, boutons, LEDs, afficheur du quantizer, ORDER, oscilloscope, patch
+  bay avec câbles, infobulles, redimensionnement. Capture : `docs/checkpoints/phase-5/panneau.png`.
+- 54 tests verts sur les 4 presets et sous ASan ; pluginval niveau 10 **avec** ses tests d'éditeur et `auval` : OK.
+
+### Reste à faire
+- **Essai par Gaby dans la DAW** : les interactions à la souris (knobs, boutons, combinaisons, câbles) ne sont
+  pas testées automatiquement.
+- Retours de Gaby ci-dessus : typo et LEDs, direction plus agressive et industrielle.
+- Checklist de la phase, PR.

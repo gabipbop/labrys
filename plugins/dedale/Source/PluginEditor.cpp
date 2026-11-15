@@ -1,25 +1,41 @@
 #include "PluginEditor.h"
 
-#include "PluginProcessor.h"
-
-DedaleEditor::DedaleEditor(DedaleProcessor& processor) : AudioProcessorEditor(processor)
+namespace
 {
-    setSize(920, 400); // format paysage ~2,3:1 (§11.1)
+constexpr int kDefaultWidth = 1200; // 125 %
+const juce::Identifier kWidthProperty{"ui_width"};
+} // namespace
+
+DedaleEditor::DedaleEditor(DedaleProcessor& processor)
+    : AudioProcessorEditor(processor), dedale(processor), panel(processor, *this)
+{
+    using namespace dedale::ui;
+    setLookAndFeel(&lookAndFeel);
+    addAndMakeVisible(panel);
+
+    setResizable(true, true);
+    getConstrainer()->setFixedAspectRatio(static_cast<double>(kDesignWidth) / kDesignHeight);
+    setResizeLimits(kDesignWidth * 3 / 4, kDesignHeight * 3 / 4, kDesignWidth * 2, kDesignHeight * 2);
+    const auto width =
+        juce::jlimit(kDesignWidth * 3 / 4, kDesignWidth * 2,
+                     static_cast<int>(dedale.apvts.state.getProperty(kWidthProperty, kDefaultWidth)));
+    setSize(width, width * kDesignHeight / kDesignWidth);
+}
+
+DedaleEditor::~DedaleEditor()
+{
+    setLookAndFeel(nullptr);
 }
 
 void DedaleEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff26282b));
+    g.fillAll(dedale::ui::colour::panelBottom);
+}
 
-    auto area = getLocalBounds().reduced(24);
-    g.setColour(juce::Colour(0xffd9772b));
-    g.setFont(juce::FontOptions(48.0f, juce::Font::bold));
-    g.drawText(juce::String::fromUTF8(LABRYS_DISPLAY_NAME), area.removeFromTop(64),
-               juce::Justification::centredLeft);
-
-    g.setColour(juce::Colour(0xff9aa0a6));
-    g.setFont(juce::FontOptions(16.0f));
-    g.drawText(juce::String::fromUTF8(
-                   "Phase 4 : séquenceur, voix et patch bay. Réglages : paramètres du plugin dans la DAW."),
-               area.removeFromTop(24), juce::Justification::centredLeft);
+void DedaleEditor::resized()
+{
+    const auto scale = static_cast<float>(getWidth()) / static_cast<float>(dedale::ui::kDesignWidth);
+    panel.setTransform(juce::AffineTransform::scale(scale));
+    panel.setTopLeftPosition(0, 0);
+    dedale.apvts.state.setProperty(kWidthProperty, getWidth(), nullptr); // taille retrouvée à la réouverture
 }

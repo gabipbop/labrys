@@ -39,9 +39,22 @@ Engine::processControl                           Engine::processAudio = Voice::p
 - `Engine` possède le séquenceur, les enveloppes, la voix et la patch bay ; il ne connaît pas JUCE.
 - `GenerativeSequencer` possède les deux `SeqLane`, le mode chain, le buffer et le RNG (`Rng`, xoshiro128**).
 - Tensions en volts partout (audio ±5 V, enveloppes 0 à +8 V, triggers 0/+5 V), sortie ramenée à ±1.
-- Threads : tout tourne sur le thread audio. L'UI n'y touche pas encore ; boutons, câbles et LEDs passeront par une
-  FIFO lock-free en phase 5. `DedaleProcessor::sequencer()` et `patchBay()` ne servent qu'au rendu hors temps réel.
+- `DedaleProcessor::sequencer()` ne sert qu'au rendu hors temps réel.
 - Constantes et hypothèses : `Source/Calibration.h`.
 
+## Interface (phase 5)
+```
+DedaleEditor ── échelle 75–200 % ──► ui::Panel (repère fixe 960 × 444, positions dans UI/Layout.h)
+  ├─ Background (façade statique, en cache)      ├─ SequencerLeds, ModeDisplay, ScopeView (30 Hz)
+  ├─ Knob ×32 (SliderAttachment → APVTS)         ├─ PatchBayView (souris) + CableOverlay (dessin)
+  └─ SquareButton → ButtonComboHandler ─► Action ─► DedaleProcessor::perform
+                                                      ├─ réglages : paramètres APVTS
+                                                      └─ séquenceur : FIFO sans verrou → thread audio
+câbles : DedaleProcessor::connectCable / disconnectCable (table d'atomics) → recopiée dans PatchBay à chaque bloc
+affichage : DedaleProcessor::display (atomics) et pullScope (FIFO) ← thread audio
+```
+- Threads : l'interface ne touche jamais au moteur. Tout passe par les paramètres, la FIFO d'actions, la table de
+  câbles et l'état d'affichage (ADR-017).
+
 ## À venir
-- Phase 5 : panneau, câbles à l'écran, FIFO UI ↔ audio.
+- Phase 6 : state complet (séquence, câbles), presets, MIDI clock et MIDI out, oversampling réglable.
