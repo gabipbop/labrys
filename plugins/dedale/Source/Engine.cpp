@@ -66,8 +66,8 @@ void Engine::processControl(const EngineParams& params, bool masterClock, bool m
     // haute.
     risingEdge(In::bitFlip1, flipGates[0]);
     risingEdge(In::bitFlip2, flipGates[1]);
-    seq.setBitFlipGate(0, flipGates[0].isHigh());
-    seq.setBitFlipGate(1, flipGates[1].isHigh());
+    seq.setBitFlipGate(0, flipGates[0].isHigh() || flipButtons[0]);
+    seq.setBitFlipGate(1, flipGates[1].isHigh() || flipButtons[1]);
 
     const auto trigger1 = clock1 && seq.tick(0);
     const auto trigger2 = clock2 && seq.tick(1);

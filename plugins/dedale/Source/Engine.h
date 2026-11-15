@@ -30,6 +30,8 @@ public:
 
     GenerativeSequencer& sequencer() noexcept { return seq; }
     PatchBay& patchBay() noexcept { return bay; }
+    // Bouton BIT FLIP du panneau : s'ajoute au jack BIT FLIP de la même lane.
+    void setBitFlipButton(int lane, bool down) noexcept { flipButtons[lane == 0 ? 0u : 1u] = down; }
 
     // masterClock : tick de l'horloge interne/hôte. manualTrigger : bouton TRIGGER ou Note On à l'arrêt.
     void processControl(const EngineParams& params, bool masterClock, bool manualTrigger) noexcept;
@@ -47,6 +49,7 @@ private:
 
     std::array<GateDetector, kNumLanes> clockGates;
     std::array<GateDetector, kNumLanes> flipGates;
+    std::array<bool, kNumLanes> flipButtons{};
     GateDetector resetGate;
     GateDetector triggerGate;
     GateDetector eg2TrigGate;

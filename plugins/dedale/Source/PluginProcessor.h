@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine.h"
+#include "Sequencer/ButtonComboHandler.h"
 #include "Sequencer/Clock.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -37,14 +38,36 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // Fixe la seed du séquenceur et tire le motif de départ (provisoire : il n'y a pas de boutons avant la
-    // phase 5).
+    // Fixe la seed du séquenceur et tire le motif de départ.
     void seedSequencer(std::uint32_t seed) noexcept;
 
-    // Accès direct au séquenceur et à la patch bay, hors temps réel seulement (rendu offline) : jamais
-    // pendant processBlock. L'UI passera par une FIFO en phase 5.
+    // Accès direct au séquenceur, hors temps réel seulement (rendu offline) : jamais pendant processBlock.
     dedale::GenerativeSequencer& sequencer() noexcept { return engine.sequencer(); }
-    dedale::PatchBay& patchBay() noexcept { return engine.patchBay(); }
+
+    // --- Interface → audio (à appeler depuis le thread de l'interface) ---
+    // Action d'un bouton du panneau : les réglages (quantizer, division) passent par les paramètres, le reste
+    // par une FIFO lue au début du bloc audio suivant.
+    void perform(const dedale::Action& action);
+    // Câbles : la table ci-dessous fait foi, le thread audio la recopie dans la patch bay à chaque bloc.
+    void connectCable(dedale::Out output, dedale::In input) noexcept;
+    void disconnectCable(dedale::In input) noexcept;
+    int cableSource(dedale::In input) const noexcept; // sortie reliée, ou −1
+
+    // --- Audio → interface ---
+    struct Display
+    {
+        std::array<std::atomic<std::uint8_t>, dedale::kNumLanes> bits{}; // bit i = pas i actif
+        std::array<std::atomic<int>, dedale::kNumLanes> playHead{};
+        std::array<std::atomic<int>, dedale::kNumLanes> writeHead{};
+        std::array<std::atomic<int>, dedale::kNumLanes> length{};
+        std::atomic<int> quantMode{0};
+        std::atomic<bool> chained{false};
+        std::atomic<bool> running{false};
+        std::atomic<bool> hasBuffer{false};
+    };
+    Display display;
+    // Copie dans destination les derniers échantillons de sortie disponibles pour l'oscilloscope.
+    int pullScope(float* destination, int maxSamples) noexcept;
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -85,6 +108,9 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void pullParameters() noexcept;
+    void applyUiActions() noexcept;
+    void applyCables() noexcept;
+    void publishDisplay() noexcept;
     bool startHostClock() noexcept;
     void renderChunk(float* output, int numSamples, juce::MidiBufferIterator& event,
                      const juce::MidiBufferIterator& lastEvent, int offset, bool useHost) noexcept;
@@ -117,6 +143,19 @@ private:
     int lastQuantMode = -1;
     int lastChain = -1;
     bool wasRunning = false;
+
+    // FIFO des actions de boutons (un producteur : l'interface ; un consommateur : l'audio).
+    static constexpr int kActionCapacity = 64;
+    juce::AbstractFifo actionFifo{kActionCapacity};
+    std::array<dedale::Action, kActionCapacity> actionQueue{};
+    bool pendingTrigger = false;
+
+    std::array<std::atomic<std::int8_t>, dedale::kNumInputs> cables;
+    std::array<std::int8_t, dedale::kNumInputs> appliedCables{};
+
+    static constexpr int kScopeCapacity = 4096;
+    juce::AbstractFifo scopeFifo{kScopeCapacity};
+    std::array<float, kScopeCapacity> scopeData{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DedaleProcessor)
 };
