@@ -27,14 +27,25 @@ struct ContinuousSpec
     float maximum;
     float defaultValue;
     bool exponential = false;
+    char unit = '%'; // '%' : pourcentage, 'h' : hertz, 's' : secondes
 };
+
+juce::String describe(float value, char unit)
+{
+    if (unit == 'h')
+        return juce::String(value, value < 100.0f ? 1 : 0) + " Hz";
+    if (unit == 's')
+        return value < 1.0f ? juce::String(juce::roundToInt(value * 1000.0f)) + " ms"
+                            : juce::String(value, 2) + " s";
+    return juce::String(juce::roundToInt(value * 100.0f)) + " %";
+}
 
 // Paramètres continus du §10, dans l'ordre de DedaleProcessor::Continuous.
 constexpr std::array<ContinuousSpec, DedaleProcessor::numContinuous> kContinuous{{
-    {"vco_freq", "VCO FREQUENCY", 20.0f, 5000.0f, 110.0f, true},
+    {"vco_freq", "VCO FREQUENCY", 20.0f, 5000.0f, 110.0f, true, 'h'},
     {"vco_eg1_amt", "VCO EG1 AMT", -1.0f, 1.0f, 0.0f},
     {"vco_seq1_amt", "VCO SEQ1 AMT", 0.0f, 1.0f, 1.0f},
-    {"mvco_freq", "MOD VCO FREQUENCY", 0.1f, 1300.0f, 55.0f, true},
+    {"mvco_freq", "MOD VCO FREQUENCY", 0.1f, 1300.0f, 55.0f, true, 'h'},
     {"mvco_eg1_amt", "MOD VCO EG1 AMT", -1.0f, 1.0f, 0.0f},
     {"mvco_seq2_amt", "MOD VCO SEQ2 AMT", 0.0f, 1.0f, 0.0f},
     {"mvco_fm_amt", "FM AMT", 0.0f, 1.0f, 0.0f},
@@ -47,14 +58,14 @@ constexpr std::array<ContinuousSpec, DedaleProcessor::numContinuous> kContinuous
     {"vcw_bias", "VCW BIAS", -1.0f, 1.0f, 0.0f},
     {"vcw_eg1_amt", "VCW EG1/CV AMT", -1.0f, 1.0f, 0.3f},
     {"vcw_seq1_amt", "VCW SEQ1 AMT", 0.0f, 1.0f, 0.0f},
-    {"vcf_cutoff", "VCF CUTOFF", 20.0f, 20000.0f, 800.0f, true},
+    {"vcf_cutoff", "VCF CUTOFF", 20.0f, 20000.0f, 800.0f, true, 'h'},
     {"vcf_eg1_amt", "VCF EG1/CV AMT", -1.0f, 1.0f, 0.3f},
     {"vcf_seq2_amt", "VCF SEQ2 AMT", 0.0f, 1.0f, 0.0f},
     {"vcf_res", "RESONANCE", 0.0f, 1.0f, 0.2f},
     {"vcf_mode", "FILTER MODE", 0.0f, 1.0f, 0.0f},
     {"blend", "BLEND", 0.0f, 1.0f, 0.5f},
-    {"eg1_decay", "EG1 DECAY", 0.01f, 10.0f, 0.3f, true},
-    {"eg2_decay", "EG2 DECAY", 0.01f, 10.0f, 0.4f, true},
+    {"eg1_decay", "EG1 DECAY", 0.01f, 10.0f, 0.3f, true, 's'},
+    {"eg2_decay", "EG2 DECAY", 0.01f, 10.0f, 0.4f, true, 's'},
     {"eg_trig_mix", "EG TRIG MIX", 0.0f, 1.0f, 0.0f},
     {"volume", "VOLUME", 0.0f, 1.0f, 0.7f},
     {"umix1_lvl", "U MIX 1 LVL", 0.0f, 1.0f, 0.0f},
@@ -70,25 +81,36 @@ juce::AudioProcessorValueTreeState::ParameterLayout DedaleProcessor::createParam
     const juce::NormalisableRange<float> unit{0.0f, 1.0f};
 
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    const auto percent = juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+        [](float value, int) { return describe(value, '%'); });
     for (const auto& spec : kContinuous)
     {
         const auto range = spec.exponential ? exponentialRange(spec.minimum, spec.maximum)
                                             : juce::NormalisableRange<float>{spec.minimum, spec.maximum};
-        layout.add(std::make_unique<Float>(id(spec.id), spec.name, range, spec.defaultValue));
+        const auto attributes = juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [unit = spec.unit](float value, int) { return describe(value, unit); });
+        layout.add(std::make_unique<Float>(id(spec.id), spec.name, range, spec.defaultValue, attributes));
     }
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         id("order"), "ORDER", juce::StringArray{"PARALLEL", "VCW>VCF", "VCF>VCW"}, 0));
 
+    // TEMPO : en pas par minute, avec l'équivalent en hertz (§8.6).
     layout.add(std::make_unique<Float>(
         id("tempo"), "TEMPO", exponentialRange(cal::kTempoMinStepsPerMinute, cal::kTempoMaxStepsPerMinute),
-        cal::kTempoDefaultStepsPerMinute));
+        cal::kTempoDefaultStepsPerMinute,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [](float value, int)
+            {
+                return juce::String(juce::roundToInt(value)) + " pas/min (" + juce::String(value / 60.0f, 1) +
+                       " Hz)";
+            })));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         id("sync_mode"), "SYNC", juce::StringArray{"INTERNAL", "HOST"}, kSyncHost));
     layout.add(std::make_unique<Int>(id("clock_div"), "DIVISION", 1, 16, 1));
-    layout.add(std::make_unique<Float>(id("seq1_corrupt"), "SEQ1 CORRUPT", unit, 0.0f));
-    layout.add(std::make_unique<Float>(id("seq2_corrupt"), "SEQ2 CORRUPT", unit, 0.0f));
-    layout.add(std::make_unique<Float>(id("seq1_range"), "SEQ1 CV RANGE", unit, 0.3f));
-    layout.add(std::make_unique<Float>(id("seq2_range"), "SEQ2 CV RANGE", unit, 0.3f));
+    layout.add(std::make_unique<Float>(id("seq1_corrupt"), "SEQ1 CORRUPT", unit, 0.0f, percent));
+    layout.add(std::make_unique<Float>(id("seq2_corrupt"), "SEQ2 CORRUPT", unit, 0.0f, percent));
+    layout.add(std::make_unique<Float>(id("seq1_range"), "SEQ1 CV RANGE", unit, 0.3f, percent));
+    layout.add(std::make_unique<Float>(id("seq2_range"), "SEQ2 CV RANGE", unit, 0.3f, percent));
     layout.add(std::make_unique<Bool>(id("run"), "RUN/STOP", false));
     layout.add(std::make_unique<Bool>(id("chain"), "CHAIN SEQ", false));
     layout.add(std::make_unique<Int>(id("quant_mode"), "QUANTIZER", 1, 16, cal::kDefaultQuantizerMode + 1));
@@ -99,6 +121,9 @@ DedaleProcessor::DedaleProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "DEDALE", createParameterLayout())
 {
+    for (auto& cable : cables)
+        cable.store(-1);
+    appliedCables.fill(-1);
     for (std::size_t i = 0; i < kContinuous.size(); ++i)
         continuousParams[i] = apvts.getRawParameterValue(kContinuous[i].id);
     orderParam = apvts.getRawParameterValue("order");
@@ -112,6 +137,7 @@ DedaleProcessor::DedaleProcessor()
     quantModeParam = apvts.getRawParameterValue("quant_mode");
 
     seedSequencer(static_cast<std::uint32_t>(juce::Random::getSystemRandom().nextInt()));
+    publishDisplay();
 }
 
 void DedaleProcessor::seedSequencer(std::uint32_t seed) noexcept
@@ -206,6 +232,8 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         return;
 
     pullParameters();
+    applyCables();
+    applyUiActions();
     const auto useHost = startHostClock();
 
     // Par tranches d'au plus la taille de bloc annoncée : le suréchantillonneur est dimensionné pour elle.
@@ -218,6 +246,171 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     for (int channel = 1; channel < buffer.getNumChannels(); ++channel)
         buffer.copyFrom(channel, 0, buffer, 0, 0, buffer.getNumSamples()); // signal mono dupliqué (§1)
     midi.clear();
+
+    // Oscilloscope : si l'interface ne lit pas, on arrête d'écrire (elle rattrapera au prochain bloc).
+    const auto scope = scopeFifo.write(juce::jmin(buffer.getNumSamples(), scopeFifo.getFreeSpace()));
+    std::copy_n(output, scope.blockSize1, scopeData.begin() + scope.startIndex1);
+    std::copy_n(output + scope.blockSize1, scope.blockSize2, scopeData.begin() + scope.startIndex2);
+    publishDisplay();
+}
+
+// --- Pont interface ↔ audio ------------------------------------------------------------------------------
+
+void DedaleProcessor::perform(const dedale::Action& action)
+{
+    using Type = dedale::ActionType;
+    const auto stepParameter = [this](const char* id, std::atomic<float>* raw, int delta, bool wrap)
+    {
+        auto* parameter = apvts.getParameter(id);
+        auto value = juce::roundToInt(raw->load()) + delta;
+        value = wrap ? (value + 15) % 16 + 1 : juce::jlimit(1, 16, value);
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(static_cast<float>(value)));
+    };
+
+    switch (action.type)
+    {
+    case Type::quantizerNext:
+        return stepParameter("quant_mode", quantModeParam, 1, true);
+    case Type::quantizerPrevious:
+        return stepParameter("quant_mode", quantModeParam, -1, true);
+    case Type::clockDivisionUp:
+        return stepParameter("clock_div", clockDivParam, 1, false);
+    case Type::clockDivisionDown:
+        return stepParameter("clock_div", clockDivParam, -1, false);
+    default:
+        break;
+    }
+
+    const auto slot = actionFifo.write(1);
+    if (slot.blockSize1 > 0)
+        actionQueue[static_cast<std::size_t>(slot.startIndex1)] = action;
+}
+
+void DedaleProcessor::applyUiActions() noexcept
+{
+    using Type = dedale::ActionType;
+    auto& seq = engine.sequencer();
+    const auto pending = actionFifo.read(actionFifo.getNumReady());
+    const auto apply = [&](const dedale::Action& action)
+    {
+        const auto chainedSeq2 = seq.isChained() && action.lane == 1;
+        switch (action.type)
+        {
+        case Type::bitFlipGate:
+            engine.setBitFlipButton(action.lane, action.on);
+            break;
+        case Type::bitShift:
+            seq.bitShift(action.lane);
+            break;
+        case Type::bitShiftReset:
+            chainedSeq2 ? seq.syncChainPlayHeads() : seq.undoBitShift(action.lane);
+            break;
+        case Type::bitShiftAdvance:
+            chainedSeq2 ? seq.bitShift(1) : seq.shiftWriteHead(action.lane);
+            break;
+        case Type::writeHeadReset:
+            seq.resetWriteHead(action.lane);
+            break;
+        case Type::lengthPress:
+            seq.pressLength(action.lane);
+            break;
+        case Type::lengthReset:
+            seq.resetLength(action.lane);
+            break;
+        case Type::reset:
+            seq.reset();
+            break;
+        case Type::advance:
+        {
+            const auto triggers = seq.advance();
+            pendingTrigger = pendingTrigger || triggers[0] || triggers[1];
+            break;
+        }
+        case Type::bufferSave:
+            seq.saveBuffer();
+            break;
+        case Type::bufferRecall:
+        case Type::clear:
+            action.type == Type::clear ? seq.clear() : seq.recallBuffer();
+            // Le rappel change chain et quantizer : on mémorise ces valeurs pour que les paramètres,
+            // inchangés, ne les écrasent pas au bloc suivant.
+            lastQuantMode = seq.quantizerMode();
+            lastChain = seq.isChained() ? 1 : 0;
+            break;
+        case Type::trigger:
+            pendingTrigger = true;
+            break;
+        case Type::quantizerNext:
+        case Type::quantizerPrevious:
+        case Type::clockDivisionUp:
+        case Type::clockDivisionDown:
+            break; // traités par les paramètres
+        }
+    };
+    for (int i = 0; i < pending.blockSize1; ++i)
+        apply(actionQueue[static_cast<std::size_t>(pending.startIndex1 + i)]);
+    for (int i = 0; i < pending.blockSize2; ++i)
+        apply(actionQueue[static_cast<std::size_t>(pending.startIndex2 + i)]);
+}
+
+void DedaleProcessor::connectCable(dedale::Out output, dedale::In input) noexcept
+{
+    if (input != dedale::In::midi)
+        cables[static_cast<std::size_t>(input)].store(static_cast<std::int8_t>(output));
+}
+
+void DedaleProcessor::disconnectCable(dedale::In input) noexcept
+{
+    cables[static_cast<std::size_t>(input)].store(-1);
+}
+
+int DedaleProcessor::cableSource(dedale::In input) const noexcept
+{
+    return cables[static_cast<std::size_t>(input)].load();
+}
+
+void DedaleProcessor::applyCables() noexcept
+{
+    for (std::size_t i = 0; i < cables.size(); ++i)
+    {
+        const auto source = cables[i].load();
+        if (source == appliedCables[i])
+            continue;
+        appliedCables[i] = source;
+        if (source < 0)
+            engine.patchBay().disconnect(static_cast<dedale::In>(i));
+        else
+            engine.patchBay().connect(static_cast<dedale::Out>(source), static_cast<dedale::In>(i));
+    }
+}
+
+void DedaleProcessor::publishDisplay() noexcept
+{
+    auto& seq = engine.sequencer();
+    for (std::size_t lane = 0; lane < display.bits.size(); ++lane)
+    {
+        const auto index = static_cast<int>(lane);
+        const auto& l = seq.lane(index);
+        std::uint8_t mask = 0;
+        for (std::size_t step = 0; step < l.bit.size(); ++step)
+            mask = static_cast<std::uint8_t>(mask | (l.bit[step] ? 1u << step : 0u));
+        display.bits[lane].store(mask, std::memory_order_relaxed);
+        display.playHead[lane].store(l.playHead, std::memory_order_relaxed);
+        display.writeHead[lane].store(seq.writeHead(index), std::memory_order_relaxed);
+        display.length[lane].store(l.length, std::memory_order_relaxed);
+    }
+    display.quantMode.store(seq.quantizerMode(), std::memory_order_relaxed);
+    display.chained.store(seq.isChained(), std::memory_order_relaxed);
+    display.running.store(seq.isRunning(), std::memory_order_relaxed);
+    display.hasBuffer.store(seq.hasBuffer(), std::memory_order_relaxed);
+}
+
+int DedaleProcessor::pullScope(float* destination, int maxSamples) noexcept
+{
+    const auto block = scopeFifo.read(juce::jmin(maxSamples, scopeFifo.getNumReady()));
+    std::copy_n(scopeData.begin() + block.startIndex1, block.blockSize1, destination);
+    std::copy_n(scopeData.begin() + block.startIndex2, block.blockSize2, destination + block.blockSize1);
+    return block.blockSize1 + block.blockSize2;
 }
 
 // Contrôle (séquenceur, enveloppes, triggers) à la fréquence de base ; audio dans le bloc suréchantillonné
@@ -240,7 +433,8 @@ void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBuffe
     {
         // Note On : transpose la fondamentale du quantizer ; à l'arrêt, déclenche aussi les enveloppes
         // (§8.7).
-        auto manualTrigger = false;
+        auto manualTrigger = pendingTrigger; // bouton TRIGGER, ou ADVANCE tombé sur un pas actif
+        pendingTrigger = false;
         for (; event != lastEvent && (*event).samplePosition <= offset + i; ++event)
         {
             if (const auto message = (*event).getMessage(); message.isNoteOn())

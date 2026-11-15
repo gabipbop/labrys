@@ -154,3 +154,34 @@ son horloge et son CV RANGE. Le reste est interprété :
 - **Jacks exposés à la DAW** : rien en phase 4, on suit la spec §9 (extension facultative de la phase 6).
 - **Reporté** : câbles dans le state et changement de câble pendant la lecture (FIFO UI → audio) : phases 5 et 6.
   Réglage « RESET rappelle le buffer » : phase 6.
+
+## ADR-017 — Interface (2026-11-15)
+- **Direction** : après deux séries de maquettes, Gaby a choisi un rendu « synthé matériel classique » (esprit
+  Mariana) : façade noire, modules encadrés avec cartouche, knobs à jupe noire et capuchon métal, libellés
+  au-dessus des réglages, boutons lumineux. **Un seul thème, le noir** (écart au §11.2, qui en prévoyait deux).
+  Rien de la marque Moog : ni logo, ni nom, ni police, ni bois.
+- **Habillage** : la première version (Barlow Condensed, LEDs rondes, cuivre et ambre) a été jugée « trop gentille
+  et trop IA ». Parmi trois habillages plus industriels rendus par le plugin, Gaby a retenu : police **Chakra
+  Petch** (OFL, écart au §11.2 qui citait Barlow Condensed ou Space Grotesk), **LEDs et boutons à pans coupés**,
+  **accent rouge** (au lieu du cuivre/orange du §11.2), cadres de modules arrondis, **flancs noirs vissés**, vis
+  apparentes aux coins des modules. Le write head est repéré par deux traits cyan au-dessus et au-dessous de la LED.
+- **Structure** : le panneau est dessiné dans un repère fixe 960 × 444 (`UI/Layout.h` donne toutes les positions) et
+  l'éditeur lui applique une échelle (75 % à 200 %, proportions fixes, taille mémorisée dans le state). Tout est
+  vectoriel. La façade statique est mise en cache dans une image ; LEDs, afficheur, oscilloscope et câbles sont
+  des composants à part, redessinés seulement quand leur état change (minuterie à 30 Hz).
+- **Interface → audio** : les boutons passent par `ButtonComboHandler` (thread de l'interface), qui produit des
+  actions. Les réglages (quantizer, division) modifient les paramètres ; le reste part dans une FIFO sans verrou
+  lue en début de bloc. Les **câbles** sont une table d'atomics tenue par le processor, recopiée dans la patch bay
+  à chaque bloc : elle fonctionne même si l'audio est arrêté et sera la donnée à sauvegarder en phase 6.
+- **Audio → interface** : état du séquenceur publié en atomics à chaque bloc, oscilloscope par FIFO.
+- **Combinaisons à la souris** : on ne peut pas tenir deux boutons. Le bouton SHIFT verrouille BIT SHIFT, LENGTH
+  et BUFFER (ils restent tenus jusqu'au clic suivant), les autres boutons restent des appuis brefs. ADVANCE reste
+  tenu 0,6 s après son clic, le temps de cliquer RESET pour la combinaison à trois boutons. Sans SHIFT, un
+  bouton se comporte comme sur le matériel : tenu tant que la souris est enfoncée (BIT FLIP, BUFFER 1 s).
+- **Câbles** : glisser d'une prise à une autre ; glisser depuis une entrée câblée déplace le câble ; clic droit ou
+  double-clic retire. Couleur par type de signal de la sortie (audio, CV, trigger).
+- **Vérification** : `DedaleRender --ui <dossier>` capture le panneau en PNG sans DAW. pluginval niveau 10 avec
+  ses tests d'éditeur passe en local ; la CI les saute (pas d'écran). Les interactions souris ne sont pas
+  testées automatiquement : à essayer dans la DAW.
+- **Reporté** : rappel du buffer qui ne met pas à jour les paramètres `chain` et `quant_mode` affichés par la DAW
+  (phase 6, avec le state complet) ; clignotement du write head en rythme.

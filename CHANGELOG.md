@@ -20,6 +20,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions sém
 - Patch bay de 32 points : 20 entrées, 12 sorties, normalisations cassées par un câble, modulation à l'audio-rate,
   boucles de feedback. Entrées trigger avec hystérésis. Mixeur utilitaire U MIX (`umix1_lvl`).
   Pas encore de câbles à l'écran : le câblage se fait par le code en attendant le panneau.
+- Interface : panneau complet façon synthé matériel (noir, accent rouge, modules encadrés, knobs vectoriels,
+  boutons et LEDs à pans coupés), LEDs du séquenceur, combinaisons de boutons avec bouton SHIFT, patch bay avec câbles à glisser, oscilloscope,
+  infobulles, fenêtre redimensionnable de 75 % à 200 %. Valeurs des paramètres affichées avec leur unité.
 ### Retiré
 - Bip sinus de debug de la phase 2.
 

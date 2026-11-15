@@ -5,6 +5,7 @@
 add_library(dedale_core STATIC
     Source/Engine.cpp
     Source/DSP/Voice.cpp
+    Source/Sequencer/ButtonComboHandler.cpp
     Source/Sequencer/Clock.cpp
     Source/Sequencer/GenerativeSequencer.cpp
     Source/Sequencer/Quantizer.cpp)
@@ -30,9 +31,18 @@ juce_add_plugin(Dedale
     AU_MAIN_TYPE kAudioUnitType_MusicDevice
     COPY_PLUGIN_AFTER_BUILD ${LABRYS_COPY_PLUGINS})
 
-target_sources(Dedale PRIVATE
+set(DEDALE_PLUGIN_SOURCES
     Source/PluginProcessor.cpp
-    Source/PluginEditor.cpp)
+    Source/PluginEditor.cpp
+    Source/UI/Panel.cpp
+    Source/UI/PatchBayView.cpp
+    Source/UI/Widgets.cpp)
+target_sources(Dedale PRIVATE ${DEDALE_PLUGIN_SOURCES})
+
+# Police de l'interface (Chakra Petch, licence OFL : Resources/fonts/OFL-ChakraPetch.txt), embarquée dans le binaire.
+juce_add_binary_data(DedaleAssets SOURCES
+    Resources/fonts/ChakraPetch-SemiBold.ttf
+    Resources/fonts/ChakraPetch-Bold.ttf)
 
 target_compile_definitions(Dedale PUBLIC
     JUCE_WEB_BROWSER=0
@@ -43,6 +53,7 @@ target_compile_definitions(Dedale PUBLIC
 target_link_libraries(Dedale
     PRIVATE
         dedale_core
+        DedaleAssets
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -50,7 +61,7 @@ target_link_libraries(Dedale
         juce::juce_recommended_lto_flags)
 
 # Warnings stricts sur notre code seulement (pas sur les sources des modules JUCE compilées dans la cible).
-set_source_files_properties(Source/PluginProcessor.cpp Source/PluginEditor.cpp
+set_source_files_properties(${DEDALE_PLUGIN_SOURCES}
     TARGET_DIRECTORY Dedale
     PROPERTIES COMPILE_OPTIONS "$<TARGET_PROPERTY:ariane_warnings,INTERFACE_COMPILE_OPTIONS>")
 
@@ -68,6 +79,7 @@ dedale_link_processor(DedaleRender)
 
 if(LABRYS_BUILD_TESTS)
     add_executable(DedaleTests
+        Tests/ButtonComboTests.cpp
         Tests/ClockTests.cpp
         Tests/DspTests.cpp
         Tests/PatchTests.cpp

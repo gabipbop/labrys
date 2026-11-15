@@ -97,3 +97,24 @@ Questions :
 7. Avec un câble dans EG2 TRIG, j'ai supposé que le VCA ne suit plus les triggers des séquenceurs, seulement ce
    jack. Est-ce le comportement que tu attends ?
 8. Faut-il exposer des jacks à la DAW (sorties CV, entrée sidechain) ? La spec le prévoit en option en phase 6.
+
+## Checkpoint phase 5 — Interface
+
+À essayer dans Ableton (le preset `debug` installe le plugin). Capture : `docs/checkpoints/phase-5/panneau.png`.
+
+1. Les knobs se règlent-ils bien à la souris (sensibilité, double-clic pour revenir à la valeur par défaut) ? La
+   valeur affichée pendant le réglage est-elle lisible ?
+2. Les petits réglages (EG1, SEQ, FM...) sont-ils assez gros pour être attrapés à 100 % ? À quelle taille de
+   fenêtre travailles-tu ?
+3. RUN / STOP, puis BIT FLIP en cours de lecture : le pas sous le write head s'inverse-t-il au clic ? En tenant le
+   bouton, toute la séquence s'inverse-t-elle ?
+4. Combinaisons avec SHIFT : allumer SHIFT, cliquer BIT SHIFT 1 (il reste allumé), puis BIT FLIP 1 plusieurs fois.
+   Le quantizer change-t-il de mode, et les 16 LEDs montrent-elles le mode ? Ce fonctionnement est-il clair, ou
+   préfères-tu autre chose (un menu sur l'afficheur, par exemple) ?
+5. BUFFER tenu une seconde, puis CORRUPT à fond quelques secondes, puis BUFFER bref : la séquence revient-elle ?
+6. Câbles : glisser de M VCO vers BIT FLIP 1, déplacer le câble vers BIT FLIP 2, le retirer par double-clic. Le
+   geste est-il naturel ? Les couleurs par type de signal (ambre audio, bleu CV, ivoire trigger) te conviennent-elles ?
+7. L'oscilloscope est-il utile à cette taille ? À garder, agrandir ou retirer ?
+8. Lisibilité générale : libellés, contraste, densité. Le module Wavefolder est un peu vide : je resserre, ou tu
+   veux y voir autre chose ?
+9. L'habillage final (Chakra Petch, rouge, pans coupés) est-il bien ce que tu voulais une fois dans la DAW ?
