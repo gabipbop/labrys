@@ -190,6 +190,33 @@ void SquareButton::paintButton(juce::Graphics& g, bool highlighted, bool down)
     g.strokePath(shape, juce::PathStrokeType(0.8f));
 }
 
+IconButton::IconButton(Icon iconToDraw, const juce::String& tooltip) : juce::Button({}), icon(iconToDraw)
+{
+    setTooltip(tooltip);
+}
+
+void IconButton::paintButton(juce::Graphics& g, bool highlighted, bool down)
+{
+    const auto area = getLocalBounds().toFloat().reduced(2.0f);
+    const auto centre = area.getCentre();
+    const auto r = area.getWidth() * 0.5f;
+    juce::Path path;
+    if (icon == Icon::gear)
+    {
+        path.addStar(centre, 8, r * 0.62f, r);
+        path.addEllipse(juce::Rectangle<float>(r * 0.7f, r * 0.7f).withCentre(centre));
+        path.setUsingNonZeroWinding(false); // le rond central est un trou
+    }
+    else
+    {
+        const auto direction = icon == Icon::next ? 1.0f : -1.0f;
+        path.addTriangle(centre.x + direction * r * 0.6f, centre.y, centre.x - direction * r * 0.5f,
+                         centre.y - r * 0.7f, centre.x - direction * r * 0.5f, centre.y + r * 0.7f);
+    }
+    g.setColour(down ? colour::lit : highlighted ? colour::ink : colour::sub);
+    g.fillPath(path);
+}
+
 // --- LEDs du séquenceur ----------------------------------------------------------------------------------
 
 void SequencerLeds::refresh(ButtonComboHandler::DisplayMode mode, int clockDivision)
@@ -206,6 +233,18 @@ void SequencerLeds::refresh(ButtonComboHandler::DisplayMode mode, int clockDivis
                             (static_cast<juce::uint64>(d.length[lane].load()) << 18);
         state |= packed << (16 + 24 * lane);
     }
+    // Le repère du write head clignote en rythme : plein éclat sur le tick, puis en veille.
+    if (const auto tick = d.clockTicks.load(); tick != lastTick)
+    {
+        lastTick = tick;
+        flashFrames = 4;
+    }
+    else if (flashFrames > 0)
+    {
+        --flashFrames;
+    }
+    state |= flashFrames > 0 ? juce::uint64{1} << 14 : 0u;
+
     if (state == shown)
         return;
     shown = state;
@@ -271,7 +310,7 @@ void SequencerLeds::paint(juce::Graphics& g)
             g.fillPath(lens);
             if (ring) // repère du write head : deux traits cyan, au-dessus et au-dessous
             {
-                g.setColour(colour::writeHead);
+                g.setColour(colour::writeHead.withAlpha(flashFrames > 0 ? 1.0f : 0.4f));
                 g.fillRect(juce::Rectangle<float>(16.0f, 1.6f).withCentre(centre.translated(0.0f, -10.0f)));
                 g.fillRect(juce::Rectangle<float>(16.0f, 1.6f).withCentre(centre.translated(0.0f, 10.0f)));
             }

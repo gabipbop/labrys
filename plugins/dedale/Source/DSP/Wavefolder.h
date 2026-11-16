@@ -21,11 +21,12 @@ public:
     void reset() noexcept { dcBlocker.reset(); }
 
     // fold : 0..1 ; bias : −1..+1.
-    float processSample(float inputVolts, float fold, float bias) noexcept
+    float processSample(float inputVolts, float fold, float bias,
+                        bool zeroColour = calibration::kVcwZeroColour) noexcept
     {
         namespace cal = calibration;
         auto x = inputVolts / 5.0f;
-        if (cal::kVcwZeroColour) // coloration résiduelle, même à FOLD = 0
+        if (zeroColour) // coloration résiduelle, même à FOLD = 0
             x = std::tanh(cal::kVcwZeroColourDrive * x) / cal::kVcwZeroColourDrive;
 
         const auto driven = x * (cal::kVcwInputGain + fold * cal::kVcwFoldGain) + bias * cal::kVcwBiasRange;

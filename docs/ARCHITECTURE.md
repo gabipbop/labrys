@@ -57,5 +57,15 @@ affichage : DedaleProcessor::display (atomics) et pullScope (FIFO) ← thread au
 - Threads : l'interface ne touche jamais au moteur. Tout passe par les paramètres, la FIFO d'actions, la table de
   câbles et l'état d'affichage (ADR-017).
 
+## État, presets, MIDI (phase 6)
+- `StateIO` convertit séquence, câbles et réglages globaux vers et depuis le `ValueTree` du projet.
+  `DedaleProcessor::captureState` / `applyState` servent au projet (avec la séquence) et aux presets (sans).
+- `PresetManager` (`Presets.cpp`) : presets d'usine dans le code, presets utilisateur en XML.
+- `Settings.h` : réglages globaux, lus par le thread audio dans un entier atomique.
+- `MidiClock` (pur) prend la main sur l'horloge hôte ou interne tant que des impulsions arrivent.
+- Paramètres que le moteur peut changer lui-même (`run`, `chain`, `quant_mode`) : recalés par une minuterie du
+  processor sur le thread de l'interface (ADR-018).
+- `DedaleBench` : coût de `processBlock` et budget de CPU.
+
 ## À venir
-- Phase 6 : state complet (séquence, câbles), presets, MIDI clock et MIDI out, oversampling réglable.
+- Phase 7 : calibration à l'écoute.

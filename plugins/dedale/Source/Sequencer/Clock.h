@@ -32,4 +32,33 @@ private:
     double increment = 0.0;
     bool continuous = false;
 };
+
+// Horloge MIDI (24 impulsions par noire). Un pas dure « division » doubles croches, soit 6 × division
+// impulsions. Elle prend la main dès qu'une impulsion arrive, et la rend 5 s après la dernière (§8.6).
+class MidiClock
+{
+public:
+    void prepare(double newSampleRate) noexcept;
+    // Start ou Song Position 0 : la prochaine impulsion donne un tick.
+    void restart() noexcept
+    {
+        pulses = 0;
+        arm();
+    }
+    // Start ou Continue : l'horloge MIDI prend la main tout de suite, sans attendre la première impulsion
+    // (sinon l'horloge interne jouerait un pas de trop entre-temps).
+    void arm() noexcept { samplesSincePulse = 0; }
+    bool onPulse(int division) noexcept; // renvoie vrai si cette impulsion est un tick
+    void advance() noexcept              // un échantillon passe
+    {
+        if (samplesSincePulse < timeoutSamples)
+            ++samplesSincePulse;
+    }
+    bool isActive() const noexcept { return samplesSincePulse < timeoutSamples; }
+
+private:
+    long timeoutSamples = 240000;
+    long samplesSincePulse = 240000; // inactive tant qu'aucune impulsion n'est arrivée
+    int pulses = 0;
+};
 } // namespace dedale

@@ -19,6 +19,35 @@ struct SeqLane
     int writeOffset = 0;                    // décalage du write head par rapport au play head
     float corrupt = 0.0f;                   // 0..1
     float cvRange = 1.0f;                   // 0..1
+    bool operator==(const SeqLane&) const = default;
+};
+
+// Contenu du buffer : un seul slot (bits, tensions, longueurs, offsets, quantizer, chain).
+struct SequencerBuffer
+{
+    std::array<std::array<bool, kMaxSteps>, kNumLanes> bit{};
+    std::array<std::array<float, kMaxSteps>, kNumLanes> voltage{};
+    std::array<int, kNumLanes> length{};
+    std::array<int, kNumLanes> writeOffset{};
+    int quantMode = 0;
+    bool chained = false;
+    bool valid = false;
+    bool operator==(const SequencerBuffer&) const = default;
+};
+
+// État complet du séquenceur, copiable tel quel : c'est ce que la sauvegarde du projet écrit et relit.
+struct SequencerState
+{
+    std::array<SeqLane, kNumLanes> lanes{};
+    std::array<float, kNumLanes> heldVolts{};
+    std::array<bool, kNumLanes> playCurrentStepNext{true, true};
+    std::array<int, kNumLanes> rotations{};
+    SequencerBuffer buffer{};
+    int quantMode = 0;
+    int rootSemitones = 0;
+    bool chained = false;
+    bool unipolar = false;
+    bool operator==(const SequencerState&) const = default;
 };
 
 // Séquenceur génératif double (§8) : deux lanes de 8 pas à registre à décalage, chaînables en 16 pas.
@@ -75,6 +104,11 @@ public:
     void setRootSemitones(int semitones) noexcept { rootSemitones = semitones; }
     void setStep(int lane, int index, bool on, float volts) noexcept;
 
+    // --- Sauvegarde ---
+    SequencerState state() const noexcept;
+    // Restaure un état relu d'un fichier : toute valeur hors bornes est ramenée dans les bornes.
+    void setState(const SequencerState& newState) noexcept;
+
     // --- Lecture ---
     // CV de sortie : tension tenue × CV RANGE, polarité, puis quantizer.
     float cv(int lane) const noexcept;
@@ -87,17 +121,6 @@ private:
     {
         int lane;
         int index;
-    };
-
-    struct Buffer
-    {
-        std::array<std::array<bool, kMaxSteps>, kNumLanes> bit{};
-        std::array<std::array<float, kMaxSteps>, kNumLanes> voltage{};
-        std::array<int, kNumLanes> length{};
-        std::array<int, kNumLanes> writeOffset{};
-        int quantMode = 0;
-        bool chained = false;
-        bool valid = false;
     };
 
     static std::size_t laneIndex(int lane) noexcept { return lane == 0 ? 0u : 1u; }
@@ -116,7 +139,7 @@ private:
     std::array<bool, kNumLanes> playCurrentStepNext{true,
                                                     true}; // après RESET : le prochain tick joue le pas 1
     std::array<int, kNumLanes> rotations{};                // rotations à annuler par undoBitShift
-    Buffer buffer{};
+    SequencerBuffer buffer{};
     Rng rng;
     int quantMode;
     int rootSemitones = 0;

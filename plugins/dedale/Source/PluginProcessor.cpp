@@ -138,6 +138,12 @@ DedaleProcessor::DedaleProcessor()
 
     seedSequencer(static_cast<std::uint32_t>(juce::Random::getSystemRandom().nextInt()));
     publishDisplay();
+    startTimerHz(15);
+}
+
+DedaleProcessor::~DedaleProcessor()
+{
+    stopTimer();
 }
 
 void DedaleProcessor::seedSequencer(std::uint32_t seed) noexcept
@@ -148,26 +154,35 @@ void DedaleProcessor::seedSequencer(std::uint32_t seed) noexcept
         for (int step = 0; step < dedale::kMaxSteps; ++step)
             engine.sequencer().setStep(lane, step, pattern.uniform() < 0.5f, pattern.bipolarVolts());
     engine.sequencer().reset();
+    publishedState = engine.sequencer().state();
 }
 
 void DedaleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     maxChunk = juce::jmax(1, samplesPerBlock);
-    oversampling = std::make_unique<juce::dsp::Oversampling<float>>(
-        1, static_cast<size_t>(cal::kOversamplingStages),
-        juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR);
-    oversampling->initProcessing(static_cast<size_t>(maxChunk));
+    currentSampleRate = sampleRate;
     scratch.setSize(1, maxChunk);
-
     internalClock.prepare(sampleRate);
     hostClock.reset();
-    engine.prepare(sampleRate, static_cast<int>(oversampling->getOversamplingFactor()), maxChunk);
-    wasRunning = false;
+    rebuildOversampling();
+    midiClock.prepare(sampleRate);
+    midiOutput.ensureSize(4096);
+    activeNote = {-1, -1};
 
     smoothingCoefficient =
         1.0f - std::exp(-1.0f / (cal::kParamSmoothingSeconds * static_cast<float>(sampleRate)));
     for (std::size_t i = 0; i < smoothed.size(); ++i)
         smoothed[i] = continuousParams[i]->load(); // pas de glissement au démarrage
+}
+
+// Suréchantillonneur et moteur pour le facteur choisi dans les réglages (×2, ×4 ou ×8).
+void DedaleProcessor::rebuildOversampling()
+{
+    const auto stages = juce::roundToInt(std::log2(static_cast<float>(settings().oversampling)));
+    oversampling = std::make_unique<juce::dsp::Oversampling<float>>(
+        1, static_cast<size_t>(stages), juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR);
+    oversampling->initProcessing(static_cast<size_t>(maxChunk));
+    engine.prepare(currentSampleRate, static_cast<int>(oversampling->getOversamplingFactor()), maxChunk);
 }
 
 void DedaleProcessor::releaseResources() {}
@@ -180,16 +195,18 @@ bool DedaleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 
 void DedaleProcessor::pullParameters() noexcept
 {
-    const auto running = runParam->load() > 0.5f;
-    engine.sequencer().setRunning(running);
-    if (running && !wasRunning)
-        internalClock.reset(); // le premier pas tombe dès l'appui sur RUN
-    wasRunning = running;
+    // RUN : le paramètre n'est appliqué que lorsqu'il change, pour ne pas écraser un Start ou un Stop MIDI.
+    if (const auto run = runParam->load() > 0.5f ? 1 : 0; run != lastRunParam)
+        setRunning((lastRunParam = run) == 1);
 
-    if (const auto mode = juce::roundToInt(quantModeParam->load()) - 1; mode != lastQuantMode)
-        engine.sequencer().setQuantizerMode(lastQuantMode = mode);
-    if (const auto chain = chainParam->load() > 0.5f ? 1 : 0; chain != lastChain)
-        engine.sequencer().setChain((lastChain = chain) == 1);
+    if (const auto mode = juce::roundToInt(quantModeParam->load()) - 1; mode != lastQuantParam)
+        engine.sequencer().setQuantizerMode(lastQuantParam = mode);
+    if (const auto chain = chainParam->load() > 0.5f ? 1 : 0; chain != lastChainParam)
+        engine.sequencer().setChain((lastChainParam = chain) == 1);
+
+    blockSettings = dedale::unpack(settingsBits.load(std::memory_order_relaxed));
+    engine.sequencer().setUnipolar(blockSettings.unipolarCv);
+    engine.setResetRecallsBuffer(blockSettings.resetRecallsBuffer);
 
     for (std::size_t lane = 0; lane < corruptParams.size(); ++lane)
     {
@@ -233,6 +250,7 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     pullParameters();
     applyCables();
+    exchangeSequencerState();
     applyUiActions();
     const auto useHost = startHostClock();
 
@@ -245,13 +263,98 @@ void DedaleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     for (int channel = 1; channel < buffer.getNumChannels(); ++channel)
         buffer.copyFrom(channel, 0, buffer, 0, 0, buffer.getNumSamples()); // signal mono dupliqué (§1)
-    midi.clear();
+    midi.swapWith(midiOutput); // ce qui sort : les notes des séquenceurs, si la sortie MIDI est activée
+    midiOutput.clear();
 
     // Oscilloscope : si l'interface ne lit pas, on arrête d'écrire (elle rattrapera au prochain bloc).
     const auto scope = scopeFifo.write(juce::jmin(buffer.getNumSamples(), scopeFifo.getFreeSpace()));
     std::copy_n(output, scope.blockSize1, scopeData.begin() + scope.startIndex1);
     std::copy_n(output + scope.blockSize1, scope.blockSize2, scopeData.begin() + scope.startIndex2);
     publishDisplay();
+}
+
+// --- MIDI -------------------------------------------------------------------------------------------------
+
+void DedaleProcessor::setRunning(bool shouldRun) noexcept
+{
+    auto& seq = engine.sequencer();
+    if (shouldRun && !seq.isRunning())
+        internalClock.reset(); // le premier pas tombe dès le départ
+    seq.setRunning(shouldRun);
+    modesChanged = true; // le paramètre RUN suivra
+}
+
+void DedaleProcessor::handleMidi(const juce::MidiMessage& message, bool& midiTick,
+                                 bool& manualTrigger) noexcept
+{
+    auto& seq = engine.sequencer();
+    if (message.isMidiClock())
+    {
+        midiTick = midiClock.onPulse(juce::roundToInt(clockDivParam->load())) || midiTick;
+    }
+    else if (message.isMidiStart()) // reset + run
+    {
+        seq.reset();
+        midiClock.restart();
+        setRunning(true);
+    }
+    else if (message.isMidiStop())
+    {
+        setRunning(false);
+    }
+    else if (message.isMidiContinue()) // run sans reset
+    {
+        midiClock.arm();
+        setRunning(true);
+    }
+    else if (message.isSongPositionPointer())
+    {
+        if (message.getSongPositionPointerMidiBeat() == 0)
+        {
+            seq.reset();
+            midiClock.restart();
+        }
+    }
+    else if (message.isNoteOn() &&
+             (blockSettings.midiChannel == 0 || message.getChannel() == blockSettings.midiChannel))
+    {
+        // Note On : transpose la fondamentale du quantizer ; à l'arrêt, déclenche aussi les enveloppes
+        // (§8.7).
+        seq.setRootSemitones(message.getNoteNumber() - cal::kMidiRootNote);
+        manualTrigger = manualTrigger || !seq.isRunning();
+    }
+}
+
+// Sortie MIDI : chaque trigger de séquenceur devient une note dont la hauteur est la CV quantifiée.
+void DedaleProcessor::emitMidiNotes(int samplePosition) noexcept
+{
+    const auto base = blockSettings.midiChannel == 0 ? 1 : blockSettings.midiChannel;
+    const auto triggers = engine.lastTriggers();
+    for (std::size_t lane = 0; lane < triggers.size(); ++lane)
+    {
+        const auto channel = lane == 0 ? base : base % 16 + 1; // SEQ2 sur le canal suivant
+        auto& note = activeNote[lane];
+        const auto stop = [&]
+        {
+            if (note >= 0)
+                midiOutput.addEvent(juce::MidiMessage::noteOff(channel, note), samplePosition);
+            note = -1;
+        };
+
+        if (note >= 0 && (--noteSamplesLeft[lane] <= 0 || !blockSettings.midiOut))
+            stop();
+        if (triggers[lane] && blockSettings.midiOut)
+        {
+            stop();
+            const auto semitones = juce::roundToInt(engine.sequencer().cv(static_cast<int>(lane)) * 12.0f);
+            note = juce::jlimit(0, 127, cal::kMidiRootNote + semitones);
+            noteSamplesLeft[lane] =
+                juce::roundToInt(cal::kMidiOutGateSeconds * static_cast<float>(currentSampleRate));
+            midiOutput.addEvent(
+                juce::MidiMessage::noteOn(channel, note, static_cast<juce::uint8>(cal::kMidiOutVelocity)),
+                samplePosition);
+        }
+    }
 }
 
 // --- Pont interface ↔ audio ------------------------------------------------------------------------------
@@ -332,10 +435,7 @@ void DedaleProcessor::applyUiActions() noexcept
         case Type::bufferRecall:
         case Type::clear:
             action.type == Type::clear ? seq.clear() : seq.recallBuffer();
-            // Le rappel change chain et quantizer : on mémorise ces valeurs pour que les paramètres,
-            // inchangés, ne les écrasent pas au bloc suivant.
-            lastQuantMode = seq.quantizerMode();
-            lastChain = seq.isChained() ? 1 : 0;
+            modesChanged = true; // chain et quantizer ont pu changer : les paramètres suivront
             break;
         case Type::trigger:
             pendingTrigger = true;
@@ -403,6 +503,28 @@ void DedaleProcessor::publishDisplay() noexcept
     display.chained.store(seq.isChained(), std::memory_order_relaxed);
     display.running.store(seq.isRunning(), std::memory_order_relaxed);
     display.hasBuffer.store(seq.hasBuffer(), std::memory_order_relaxed);
+    display.clockTicks.store(clockTicks, std::memory_order_relaxed);
+
+    if (const juce::SpinLock::ScopedTryLockType lock(stateLock); lock.isLocked())
+        publishedState = seq.state();
+    if (modesChanged)
+    {
+        modesChanged = false;
+        modesDirty.store(true);
+    }
+}
+
+// Restauration demandée par l'interface (chargement d'un projet ou d'un preset) : appliquée ici, sans
+// attendre.
+void DedaleProcessor::exchangeSequencerState() noexcept
+{
+    const juce::SpinLock::ScopedTryLockType lock(stateLock);
+    if (lock.isLocked() && hasPendingState)
+    {
+        engine.sequencer().setState(pendingState);
+        hasPendingState = false;
+        modesChanged = true;
+    }
 }
 
 int DedaleProcessor::pullScope(float* destination, int maxSamples) noexcept
@@ -431,24 +553,20 @@ void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBuffe
 
     for (int i = 0; i < numSamples; ++i)
     {
-        // Note On : transpose la fondamentale du quantizer ; à l'arrêt, déclenche aussi les enveloppes
-        // (§8.7).
         auto manualTrigger = pendingTrigger; // bouton TRIGGER, ou ADVANCE tombé sur un pas actif
+        auto midiTick = false;
         pendingTrigger = false;
         for (; event != lastEvent && (*event).samplePosition <= offset + i; ++event)
-        {
-            if (const auto message = (*event).getMessage(); message.isNoteOn())
-            {
-                engine.sequencer().setRootSemitones(message.getNoteNumber() - cal::kMidiRootNote);
-                manualTrigger = !engine.sequencer().isRunning();
-            }
-        }
+            handleMidi((*event).getMessage(), midiTick, manualTrigger);
+        midiClock.advance();
 
         for (std::size_t p = 0; p < smoothed.size(); ++p)
             smoothed[p] += (targets[p] - smoothed[p]) * smoothingCoefficient;
 
         const auto internalTick = internalClock.processSample(stepsPerMinute);
-        const auto tick = useHost ? hostClock.processSample(division) : internalTick;
+        const auto hostTick = useHost && hostClock.processSample(division);
+        // Priorité des horloges : MIDI tant qu'elle bat, puis hôte, puis interne (§8.6).
+        const auto tick = midiClock.isActive() ? midiTick : useHost ? hostTick : internalTick;
 
         dedale::EngineParams params;
         params.eg1Decay = smoothed[eg1Decay];
@@ -480,8 +598,12 @@ void DedaleProcessor::renderChunk(float* output, int numSamples, juce::MidiBuffe
         v.blend = smoothed[blend];
         v.volume = smoothed[volume];
         v.umix1Level = smoothed[umix1Lvl];
+        v.analogDrift = blockSettings.analogDrift;
+        v.vcwZeroColour = blockSettings.vcwZeroColour;
 
+        clockTicks += tick ? 1u : 0u;
         engine.processControl(params, tick, manualTrigger);
+        emitMidiNotes(offset + i);
         for (int k = 0; k < factor; ++k)
             fast[i * factor + k] = engine.processAudio();
     }
@@ -495,18 +617,116 @@ juce::AudioProcessorEditor* DedaleProcessor::createEditor()
     return new DedaleEditor(*this);
 }
 
-// Seuls les paramètres sont sauvegardés pour l'instant. Séquence, buffer et réglages globaux : phase 6 (§10).
+// --- État du plugin --------------------------------------------------------------------------------------
+
+dedale::SequencerState DedaleProcessor::sequencerState() const
+{
+    const juce::SpinLock::ScopedLockType lock(stateLock);
+    return hasPendingState ? pendingState : publishedState;
+}
+
+void DedaleProcessor::setSequencerState(const dedale::SequencerState& state)
+{
+    const juce::SpinLock::ScopedLockType lock(stateLock);
+    pendingState = state;
+    hasPendingState = true;
+}
+
+dedale::GlobalSettings DedaleProcessor::settings() const noexcept
+{
+    return dedale::unpack(settingsBits.load());
+}
+
+void DedaleProcessor::setSettings(const dedale::GlobalSettings& newSettings)
+{
+    const auto oversamplingChanged = newSettings.oversampling != settings().oversampling;
+    settingsBits.store(dedale::pack(newSettings));
+    if (oversamplingChanged && oversampling != nullptr)
+    {
+        // Changement de facteur : le traitement est suspendu le temps de reconstruire le suréchantillonneur.
+        suspendProcessing(true);
+        {
+            const juce::ScopedLock lock(getCallbackLock());
+            rebuildOversampling();
+        }
+        suspendProcessing(false);
+    }
+}
+
+juce::ValueTree DedaleProcessor::captureState(bool withSequence)
+{
+    namespace io = dedale::stateio;
+    auto tree = apvts.copyState(); // recopie d'abord les valeurs courantes des paramètres dans l'arbre
+    for (const auto& name : {io::kSequencer, io::kCables, io::kSettings})
+        tree.removeChild(tree.getChildWithName(name), nullptr);
+    tree.setProperty(io::kVersion, io::kStateVersion, nullptr);
+
+    io::Cables cableTable;
+    for (std::size_t i = 0; i < cableTable.size(); ++i)
+        cableTable[i] = cables[i].load();
+    tree.appendChild(io::toTree(cableTable), nullptr);
+    tree.appendChild(io::toTree(settings()), nullptr);
+    if (withSequence)
+        tree.appendChild(io::toTree(sequencerState()), nullptr);
+    return tree;
+}
+
+void DedaleProcessor::applyState(const juce::ValueTree& state, bool withSequence)
+{
+    namespace io = dedale::stateio;
+    if (!state.hasType(apvts.state.getType()))
+        return;
+
+    const auto width =
+        apvts.state.getProperty("ui_width"); // la taille de la fenêtre n'appartient pas au preset
+    auto parameters = state.createCopy();
+    for (const auto& name : {io::kSequencer, io::kCables, io::kSettings})
+        parameters.removeChild(parameters.getChildWithName(name), nullptr);
+    if (!withSequence && !width.isVoid())
+        parameters.setProperty("ui_width", width, nullptr);
+    apvts.replaceState(parameters);
+
+    // Câbles et réglages : absents d'un ancien projet, ils gardent alors leur valeur courante.
+    if (const auto cableTree = state.getChildWithName(io::kCables); cableTree.isValid())
+    {
+        const auto table = io::cablesFromTree(cableTree);
+        for (std::size_t i = 0; i < table.size(); ++i)
+            cables[i].store(static_cast<std::int8_t>(table[i]));
+    }
+    if (const auto settingsTree = state.getChildWithName(io::kSettings);
+        settingsTree.isValid() && withSequence)
+        setSettings(io::settingsFromTree(settingsTree, settings()));
+    if (const auto sequencerTree = state.getChildWithName(io::kSequencer);
+        sequencerTree.isValid() && withSequence)
+        setSequencerState(io::sequencerFromTree(sequencerTree, sequencerState()));
+}
+
 void DedaleProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    if (const auto xml = apvts.copyState().createXml())
+    if (const auto xml = captureState(true).createXml())
         copyXmlToBinary(*xml, destData);
 }
 
 void DedaleProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    if (const auto xml = getXmlFromBinary(data, sizeInBytes);
-        xml != nullptr && xml->hasTagName(apvts.state.getType()))
-        apvts.replaceState(juce::ValueTree::fromXml(*xml));
+    if (const auto xml = getXmlFromBinary(data, sizeInBytes))
+        applyState(juce::ValueTree::fromXml(*xml), true);
+}
+
+void DedaleProcessor::syncParametersFromSequencer()
+{
+    if (!modesDirty.exchange(false))
+        return;
+    const auto set = [this](const char* id, float value)
+    {
+        auto* parameter = apvts.getParameter(id);
+        const auto normalised = parameter->convertTo0to1(value);
+        if (std::abs(parameter->getValue() - normalised) > 1.0e-6f)
+            parameter->setValueNotifyingHost(normalised);
+    };
+    set("quant_mode", static_cast<float>(display.quantMode.load() + 1));
+    set("chain", display.chained.load() ? 1.0f : 0.0f);
+    set("run", display.running.load() ? 1.0f : 0.0f);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

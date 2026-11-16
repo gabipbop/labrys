@@ -304,6 +304,53 @@ void GenerativeSequencer::setStep(int lane, int index, bool on, float volts) noe
     l.voltage[i] = std::clamp(volts, -5.0f, 5.0f);
 }
 
+SequencerState GenerativeSequencer::state() const noexcept
+{
+    return {lanes,   heldVolts, playCurrentStepNext, rotations, buffer, quantMode, rootSemitones,
+            chained, unipolar};
+}
+
+void GenerativeSequencer::setState(const SequencerState& s) noexcept
+{
+    const auto volts = [](float v) { return v == v ? std::clamp(v, -5.0f, 5.0f) : 0.0f; }; // NaN → 0 V
+    const auto unit = [](float v) { return v == v ? std::clamp(v, 0.0f, 1.0f) : 0.0f; };
+
+    chained = s.chained;
+    unipolar = s.unipolar;
+    quantMode = std::clamp(s.quantMode, 0, kNumQuantizerModes - 1);
+    rootSemitones = std::clamp(s.rootSemitones, -127, 127);
+    lanes = s.lanes;
+    buffer = s.buffer;
+    playCurrentStepNext = s.playCurrentStepNext;
+
+    for (std::size_t i = 0; i < lanes.size(); ++i)
+    {
+        auto& l = lanes[i];
+        l.length = std::clamp(l.length, 1, kMaxSteps);
+        l.corrupt = unit(l.corrupt);
+        l.cvRange = unit(l.cvRange);
+        for (auto& v : l.voltage)
+            v = volts(v);
+        heldVolts[i] = volts(s.heldVolts[i]);
+
+        buffer.length[i] = std::clamp(buffer.length[i], 1, kMaxSteps);
+        buffer.writeOffset[i] = std::clamp(buffer.writeOffset[i], 0, 2 * kMaxSteps - 1);
+        for (auto& v : buffer.voltage[i])
+            v = volts(v);
+    }
+    buffer.quantMode = std::clamp(buffer.quantMode, 0, kNumQuantizerModes - 1);
+
+    // Têtes et compteurs : dans la longueur parcourue, qui dépend des longueurs et du mode chain.
+    for (int lane = 0; lane < kNumLanes; ++lane)
+    {
+        auto& l = lanes[laneIndex(lane)];
+        const auto n = span(lane);
+        l.playHead = std::clamp(l.playHead, 0, n - 1);
+        l.writeOffset = std::clamp(l.writeOffset, 0, n - 1);
+        rotations[laneIndex(lane)] = std::clamp(s.rotations[laneIndex(lane)], 0, n - 1);
+    }
+}
+
 float GenerativeSequencer::cv(int lane) const noexcept
 {
     const auto range = lanes[laneIndex(lane)].cvRange;

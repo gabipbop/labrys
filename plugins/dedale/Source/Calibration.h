@@ -79,12 +79,21 @@ inline constexpr float kEgAttackSeconds = 0.0007f; // micro-attaque anti-clic
 inline constexpr float kEgSmoothingHz = 2000.0f;   // lissage de la CV de sortie
 inline constexpr float kOutputHeadroom = 0.7f;     // gain avant la sortie : le patch init reste sous le genou
 inline constexpr float kOutputClipKneeVolts = 3.5f; // l'écrêtage de sécurité commence ici, plafond à 5 V
-inline constexpr int kOversamplingStages = 2;       // ×4 (réglable en phase 6)
 inline constexpr float kParamSmoothingSeconds = 0.02f;
+
+// --- Drift analogique (§3.1) ---
+inline constexpr float kDriftCents = 2.0f; // écart-type de la dérive de hauteur, en cents
+inline constexpr float kDriftHz = 0.3f;    // rapidité de la dérive
 
 // --- Patch bay (§9) ---
 inline constexpr float kTriggerPulseSeconds = 0.001f; // largeur des impulsions SEQ TRIG et CLOCK (0 → +5 V)
 inline constexpr float kRailVolts = 10.0f;            // U MIX sature aux rails, comme le circuit
 // Hypothèse : un câble dans EG2 TRIG isole EG2, qui ne suit plus ni TRIGGER ni les triggers des séquenceurs.
 inline constexpr bool kEg2TrigJackIsolatesEg2 = true;
+
+// --- MIDI (§8.6, §8.7) ---
+inline constexpr double kMidiClockTimeoutSeconds = 5.0; // retour à l'horloge interne ou hôte après ce silence
+inline constexpr int kMidiPulsesPerStepAtDivision1 = 6; // 24 PPQN : une double croche = 6 impulsions
+inline constexpr float kMidiOutGateSeconds = 0.08f;     // durée des notes émises par la sortie MIDI
+inline constexpr int kMidiOutVelocity = 100;
 } // namespace dedale::calibration

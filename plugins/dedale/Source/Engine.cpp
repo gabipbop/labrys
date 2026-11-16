@@ -13,6 +13,7 @@ void Engine::prepare(double baseSampleRate, int oversamplingFactor, int maxBlock
     eg1.prepare(baseSampleRate, maxBlock);
     eg2.prepare(baseSampleRate, maxBlock);
     voice.prepare(baseSampleRate * oversamplingFactor, maxBlock * oversamplingFactor);
+    voice.setControlRate(baseSampleRate);
     pulseSamples =
         std::max(1, static_cast<int>(cal::kTriggerPulseSeconds * static_cast<float>(baseSampleRate)));
     reset();
@@ -60,7 +61,11 @@ void Engine::processControl(const EngineParams& params, bool masterClock, bool m
     const auto clock2 = bay.isPatched(In::clock2) ? risingEdge(In::clock2, clockGates[1]) : clock1;
 
     if (risingEdge(In::reset, resetGate))
+    {
         seq.reset();
+        if (resetRecallsBuffer)
+            seq.recallBuffer();
+    }
 
     // BIT FLIP : flippe sur le front montant, puis à chaque passage du write head tant que l'entrée reste
     // haute.
@@ -71,6 +76,7 @@ void Engine::processControl(const EngineParams& params, bool masterClock, bool m
 
     const auto trigger1 = clock1 && seq.tick(0);
     const auto trigger2 = clock2 && seq.tick(1);
+    triggers = {trigger1, trigger2};
 
     // --- Enveloppes ---
     // EG TRIG MIX : vélocité de chaque flux de triggers ; sur un même pas, la plus forte gagne (§7).

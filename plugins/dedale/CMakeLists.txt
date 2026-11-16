@@ -34,6 +34,8 @@ juce_add_plugin(Dedale
 set(DEDALE_PLUGIN_SOURCES
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/Presets.cpp
+    Source/StateIO.cpp
     Source/UI/Panel.cpp
     Source/UI/PatchBayView.cpp
     Source/UI/Widgets.cpp)
@@ -77,6 +79,10 @@ endfunction()
 add_executable(DedaleRender Tools/DedaleRender.cpp)
 dedale_link_processor(DedaleRender)
 
+# DedaleBench : coût de processBlock, avec un budget de CPU (§15.8).
+add_executable(DedaleBench Tools/DedaleBench.cpp)
+dedale_link_processor(DedaleBench)
+
 if(LABRYS_BUILD_TESTS)
     add_executable(DedaleTests
         Tests/ButtonComboTests.cpp
@@ -88,11 +94,18 @@ if(LABRYS_BUILD_TESTS)
     target_link_libraries(DedaleTests PRIVATE dedale_core ariane_warnings Catch2::Catch2WithMain)
     catch_discover_tests(DedaleTests)
 
-    # Golden tests : rendus complets du plugin comparés à des métriques versionnées.
-    add_executable(DedaleGoldenTests Tests/GoldenTests.cpp)
+    # Tests du processor complet (avec JUCE) : rendus comparés à des métriques versionnées, sauvegarde du projet.
+    add_executable(DedaleGoldenTests Tests/GoldenTests.cpp Tests/ProcessorTests.cpp)
     dedale_link_processor(DedaleGoldenTests)
     target_link_libraries(DedaleGoldenTests PRIVATE Catch2::Catch2)
     target_compile_definitions(DedaleGoldenTests PRIVATE
         DEDALE_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/golden/metrics.json")
-    add_test(NAME "Golden : rendus de référence" COMMAND DedaleGoldenTests)
+    add_test(NAME "Golden : rendus de référence" COMMAND DedaleGoldenTests "[golden]")
+    add_test(NAME "Processor : projet et réglages" COMMAND DedaleGoldenTests "~[golden]")
+    # Le budget de CPU n'a de sens que sur un build optimisé et une machine dédiée : étiqueté « bench »,
+    # il est exclu de la CI (runners partagés, environ trois fois plus lents et très variables).
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_test(NAME "Budget de CPU" COMMAND DedaleBench 5)
+        set_tests_properties("Budget de CPU" PROPERTIES LABELS bench)
+    endif()
 endif()

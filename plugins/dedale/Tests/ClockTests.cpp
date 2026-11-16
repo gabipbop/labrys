@@ -124,3 +124,70 @@ TEST_CASE("Horloge hôte : départ entre deux pas, saut et reprise", "[clock]")
         REQUIRE(std::labs(ticks[0] - 3000) <= 1);
     }
 }
+
+TEST_CASE("Horloge MIDI : 24 impulsions par noire, division en doubles croches", "[clock][midi]")
+{
+    dedale::MidiClock clock;
+    clock.prepare(sampleRate);
+    REQUIRE_FALSE(clock.isActive()); // rien reçu : l'horloge interne ou hôte garde la main
+
+    SECTION("division 1 : un tick toutes les 6 impulsions, dès la première")
+    {
+        int ticks = 0;
+        std::vector<int> positions;
+        for (int pulse = 0; pulse < 48; ++pulse)
+        {
+            if (clock.onPulse(1))
+            {
+                ++ticks;
+                positions.push_back(pulse);
+            }
+        }
+        REQUIRE(ticks == 8); // deux noires = 8 doubles croches
+        REQUIRE(positions[0] == 0);
+        REQUIRE(positions[1] == 6);
+        REQUIRE(clock.isActive());
+    }
+
+    SECTION("division 4 : une noire par pas ; division 16 : une ronde")
+    {
+        int quarters = 0;
+        for (int pulse = 0; pulse < 96; ++pulse)
+            quarters += clock.onPulse(4) ? 1 : 0;
+        REQUIRE(quarters == 4);
+
+        clock.restart();
+        int bars = 0;
+        for (int pulse = 0; pulse < 96 * 2; ++pulse)
+            bars += clock.onPulse(16) ? 1 : 0;
+        REQUIRE(bars == 2);
+    }
+
+    SECTION("Start : la prochaine impulsion est un tick")
+    {
+        for (int pulse = 0; pulse < 4; ++pulse)
+            clock.onPulse(1);
+        REQUIRE_FALSE(clock.onPulse(1));
+        clock.restart();
+        REQUIRE(clock.onPulse(1));
+    }
+
+    SECTION("Start arme l'horloge MIDI avant même la première impulsion")
+    {
+        clock.restart();
+        REQUIRE(clock.isActive());
+    }
+
+    SECTION("silence de 5 s : l'horloge MIDI rend la main")
+    {
+        clock.onPulse(1);
+        for (long i = 0; i < 48000 * 5 - 10; ++i)
+            clock.advance();
+        REQUIRE(clock.isActive());
+        for (int i = 0; i < 20; ++i)
+            clock.advance();
+        REQUIRE_FALSE(clock.isActive());
+        clock.onPulse(1);
+        REQUIRE(clock.isActive());
+    }
+}

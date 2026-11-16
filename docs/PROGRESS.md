@@ -111,7 +111,7 @@ Jacks exposés à la DAW : on suit la spec §9 (extension facultative de la phas
 ### Reporté
 - Câbles dans le state, câblage depuis l'UI pendant la lecture : phases 5 et 6. Jacks exposés à la DAW : phase 6.
 
-## Phase en cours : 5 — UI (branche `phase-5-ui`)
+## Phase 5 — UI : mergée (v0.5.0, PR #6), essai dans la DAW encore attendu
 Direction validée par Gaby (2026-11-15) après deux séries de maquettes : rendu « synthé matériel classique »
 (esprit Mariana), façade noire à modules encadrés, knobs à jupe noire et capuchon métal, flancs cuivre.
 **Un seul thème, le noir** (décision de Gaby : pas de thème clair, contrairement au §11.2 de la spec).
@@ -144,6 +144,37 @@ bandes jaunes). Les autres habillages et leurs polices sont retirés.
   ne sont pas testées automatiquement. Questions dans `LISTENING_CHECKLIST.md`, section phase 5.
 - Retours d'écoute des phases 2, 3 et 4.
 
-## Prochaine phase : 6 — Finitions
-State complet (séquence, câbles, réglages globaux), presets, MIDI clock et MIDI out, jacks HOST, oversampling
-réglable, profiling CPU.
+## Phase en cours : 6 — Finitions (branche `phase-6-finitions`, PR #7)
+Démarrée à la demande de Gaby (2026-11-15), essai du panneau dans la DAW encore attendu.
+
+### Plan
+1. **Sauvegarde du projet** : état complet du séquenceur (`SequencerState`, tests d'abord), câbles, réglages
+   globaux, version du format. Lecture tolérante aux valeurs hors bornes.
+2. **Réglages globaux** (menu engrenage) : RESET qui rappelle le buffer, polarité des CV, suréchantillonnage
+   ×2/×4/×8, drift analogique, coloration du wavefolder.
+3. **Presets** : fichiers XML dans le dossier utilisateur, une dizaine de presets d'usine, barre de presets.
+4. **MIDI** : clock, Start/Stop/Continue, canal, sortie MIDI.
+5. **Mesure du CPU** : `DedaleBench` avec un budget.
+6. Petits restes : rappel du buffer et paramètres, clignotement du write head, module Wavefolder.
+Jacks exposés à la DAW (macros, sidechain) : option de la spec, à décider avec Gaby.
+
+### Fait
+- **Sauvegarde du projet** : séquence, buffer, câbles et réglages globaux, format versionné, lecture tolérante.
+- **Réglages globaux** (menu engrenage) : RESET et buffer, polarité des CV, drift, coloration du wavefolder,
+  suréchantillonnage ×2/×4/×8, canal MIDI, sortie MIDI.
+- **Presets** : dix presets d'usine, presets utilisateur en fichiers, barre de presets dans l'en-tête.
+- **MIDI** : clock, Start/Stop/Continue, Song Position 0, canal, sortie des séquences en notes.
+- **Budget de CPU** : `DedaleBench`, 1,65 % (init) et 2,97 % (patch lourd) pour un budget de 5 %.
+- Le rappel du buffer et le MIDI mettent à jour les paramètres `chain`, `quant_mode` et `run` vus par la DAW.
+- Le repère du write head clignote sur l'horloge.
+- 61 tests verts en release (60 ailleurs : le budget de CPU ne tourne qu'en release), ASan propre, pluginval
+  niveau 10 avec tests d'éditeur et `auval` : OK.
+
+### En attente
+- **Essai par Gaby dans la DAW** : sauvegarde et réouverture d'un projet, presets, MIDI clock depuis Ableton,
+  enregistrement de la sortie MIDI. Questions dans `LISTENING_CHECKLIST.md`, section phase 6.
+- Décision de Gaby sur les jacks exposés à la DAW (macros automatisables, entrée sidechain).
+
+## Prochaine phase : 7 — Calibration
+Passe d'écoute guidée avec Gaby : courbe du wavefolder, résonance max, saturation du mixeur, decays, réponse des
+VCA, tonalité du bruit, aliasing. Elle dépend de ses retours d'écoute des phases 2 à 6.
