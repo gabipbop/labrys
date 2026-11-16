@@ -102,8 +102,10 @@ if(LABRYS_BUILD_TESTS)
         DEDALE_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/golden/metrics.json")
     add_test(NAME "Golden : rendus de référence" COMMAND DedaleGoldenTests "[golden]")
     add_test(NAME "Processor : projet et réglages" COMMAND DedaleGoldenTests "~[golden]")
-    # Le budget de CPU n'a de sens que sur un build optimisé.
+    # Le budget de CPU n'a de sens que sur un build optimisé et une machine dédiée : étiqueté « bench »,
+    # il est exclu de la CI (runners partagés, environ trois fois plus lents et très variables).
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
         add_test(NAME "Budget de CPU" COMMAND DedaleBench 5)
+        set_tests_properties("Budget de CPU" PROPERTIES LABELS bench)
     endif()
 endif()

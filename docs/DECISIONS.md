@@ -209,6 +209,7 @@ son horloge et son CV RANGE. Le reste est interprété :
   Sortie MIDI : note = do 4 + CV quantifiée, durée fixe (`kMidiOutGateSeconds`), SEQ2 sur le canal suivant.
 - **Budget de CPU** : `DedaleBench` mesure le meilleur de trois passes et échoue au-delà de 5 % d'un cœur. Mesuré :
   1,65 % (patch init) et 2,97 % (patch lourd, quatre modulations à l'audio-rate) en ×4 à 48 kHz. Le test n'est
-  enregistré que sur un build Release.
+  enregistré que sur un build Release, avec l'étiquette `bench`. La CI l'exclut : sur le runner partagé, le même
+  code a mesuré 4,56 % et 8,19 %. Elle lance `DedaleBench` à titre indicatif (budget 100 %, pour voir les chiffres).
 - **Non fait** : jacks exposés à la DAW (macros, sidechain), option de la spec à décider avec Gaby ; resserrage du
   module Wavefolder (question posée à Gaby dans la checklist de la phase 5).
